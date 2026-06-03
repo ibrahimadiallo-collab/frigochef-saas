@@ -1,0 +1,19 @@
+{
+  "name": "frigochef-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FrigoChef — AI SaaS che trasforma gli ingredienti del frigo in ricette.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace web",
+    "lint": "npm run lint --workspace web"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

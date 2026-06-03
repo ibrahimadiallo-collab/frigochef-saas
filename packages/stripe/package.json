@@ -1,0 +1,7 @@
+{
+  "name": "@frigochef/stripe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Placeholder: logica pagamenti e webhook Stripe. Attualmente la logica vive in apps/web/src/lib/stripe.ts.",
+  "main": "index.ts"
+}

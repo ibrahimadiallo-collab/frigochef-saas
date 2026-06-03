@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  --background: #020202;
+  --foreground: #f5f5f5;
+  --accent: #10b981; /* Emerald accent for a fresh, techy feel */
+  --accent-foreground: #ffffff;
+  --border: #1a1a1a;
+  --muted: #888888;
+  --card: #0a0a0a;
+}
+
+body {
+  font-family: var(--font-geist-sans), sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.font-mono {
+  font-family: var(--font-geist-mono), monospace;
+}
+
+/* Linear-style smooth transitions */
+* {
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+/* Custom Scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: #222;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}

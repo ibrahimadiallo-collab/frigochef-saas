@@ -1,0 +1,7 @@
+{
+  "name": "@frigochef/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Placeholder: schemi Supabase e logica dati condivisa. Attualmente la logica vive in apps/web/src/lib/{supabase,shopping}.ts.",
+  "main": "index.ts"
+}
