@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Clock, Users, BarChart, Copy, Share2, Sparkles, Play, Check } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import CookMode from './CookMode';
+import SocialShare from './SocialShare';
 
 interface Recipe {
+  id?: string;
   nome: string;
   tempo: string;
   porzioni: string;
@@ -27,6 +29,7 @@ interface RecipeCardProps {
 
 export default function RecipeCard({ recipe }: RecipeCardProps) {
   const [isCookModeOpen, setIsCookModeOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const copyToClipboard = () => {
     const text = `${recipe.nome}\n\nIngredienti:\n${recipe.ingredienti.join('\n')}\n\nProcedimento:\n${recipe.passaggi.join('\n')}`;
@@ -178,7 +181,10 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             >
               <Copy size={14} /> Copy
             </button>
-            <button className="p-3 rounded-xl border border-white/5 bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
+            <button 
+              onClick={() => setIsShareOpen(true)}
+              className="p-3 rounded-xl border border-white/5 bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
+            >
               <Share2 size={14} /> Share
             </button>
           </div>
@@ -197,6 +203,12 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
           />
         )}
       </AnimatePresence>
+
+      <SocialShare 
+        recipe={recipe} 
+        isOpen={isShareOpen} 
+        onClose={() => setIsShareOpen(false)} 
+      />
     </>
   );
 }

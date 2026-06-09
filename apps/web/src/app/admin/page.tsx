@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import { 
   BarChart3, Users, ShoppingBag, Leaf, 
-  TrendingUp, ArrowUpRight, Clock, AlertTriangle 
+  TrendingUp, ArrowUpRight, AlertTriangle 
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -23,7 +22,7 @@ export default function AdminDashboard() {
         <div className="flex justify-between items-end">
           <div>
             <h1 className="text-4xl font-bold tracking-tighter">Billion Dollar Console</h1>
-            <p className="text-white/40 mt-2 font-medium">Monitoraggio in tempo reale dell'ecosistema FrigoChef.</p>
+            <p className="text-white/40 mt-2 font-medium">Monitoraggio in tempo reale dell&apos;ecosistema FrigoChef.</p>
           </div>
           <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
@@ -60,14 +59,14 @@ export default function AdminDashboard() {
               <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div>
                   <p className="font-bold">D1 Retention (Daily Habit)</p>
-                  <p className="text-xs text-white/40">Utenti che aprono l'app per controllare le scadenze.</p>
+                  <p className="text-xs text-white/40">Utenti che aprono l&apos;app per controllare le scadenze.</p>
                 </div>
                 <p className="text-2xl font-mono font-bold text-emerald-500">42%</p>
               </div>
               <div className="p-6 bg-white/5 rounded-3xl border border-white/5 flex justify-between items-center">
                 <div>
                   <p className="font-bold">Scan-to-Recipe Conversion</p>
-                  <p className="text-xs text-white/40">Efficacia dell'AI nel proporre piatti desiderabili.</p>
+                  <p className="text-xs text-white/40">Efficacia dell&apos;AI nel proporre piatti desiderabili.</p>
                 </div>
                 <p className="text-2xl font-mono font-bold text-blue-500">68%</p>
               </div>
@@ -112,7 +111,7 @@ export default function AdminDashboard() {
                   <AlertTriangle className="text-amber-500 mt-1" size={18} />
                   <div>
                     <p className="text-sm font-bold">Ultimo Alert</p>
-                    <p className="text-xs text-white/40 mt-1 italic">"Rilevata dose anomala di sale in: Risotto allo Zafferano. Correzione AI applicata."</p>
+                    <p className="text-xs text-white/40 mt-1 italic">&quot;Rilevata dose anomala di sale in: Risotto allo Zafferano. Correzione AI applicata.&quot;</p>
                   </div>
                 </div>
               </div>

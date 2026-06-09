@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChefHat, User, LogOut } from 'lucide-react';
+import { ChefHat, User as UserIcon, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 export default function Navbar() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -64,7 +65,7 @@ export default function Navbar() {
         {user ? (
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-xs font-bold text-white/60">
-              <User size={14} />
+              <UserIcon size={14} />
               <span className="hidden sm:inline">{user.email?.split('@')[0]}</span>
             </div>
             <button 

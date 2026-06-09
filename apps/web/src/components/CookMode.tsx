@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronRight, ChevronLeft, Check, Timer, Play, Pause, RotateCcw } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Check, Timer } from 'lucide-react';
 
 interface CookModeProps {
   recipe: {

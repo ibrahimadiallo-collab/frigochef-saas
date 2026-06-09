@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateRecipe } from '@/lib/ai';
+import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
 
 export async function POST(req: Request) {
   try {
@@ -10,9 +11,32 @@ export async function POST(req: Request) {
     }
 
     const recipe = await generateRecipe(ingredients, mealType, time);
-    return NextResponse.json(recipe);
-  } catch (error: any) {
+    const user = await getUserFromRequest(req);
+
+    // Salva la ricetta nel database pubblico per SEO e condivisione
+    const { data: savedRecipe, error: saveError } = await supabaseAdmin
+      .from('recipes')
+      .insert([
+        {
+          user_id: user?.id,
+          recipe_data: recipe,
+          is_public: true
+        }
+      ])
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error('Error saving recipe:', saveError);
+    }
+
+    return NextResponse.json({
+      ...recipe,
+      id: savedRecipe?.id
+    });
+  } catch (error: unknown) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: error.message || 'Errore interno' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Errore interno';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

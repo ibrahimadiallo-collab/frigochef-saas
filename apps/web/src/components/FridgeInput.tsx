@@ -54,7 +54,7 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
         
         const data = await res.json();
         if (data.items) {
-          const names = data.items.map((i: any) => i.name);
+          const names = data.items.map((i: { name: string }) => i.name);
           const newTags = [...new Set([...tags, ...names])];
           setTags(newTags);
           if (onItemsAnalyzed) onItemsAnalyzed(data.items);

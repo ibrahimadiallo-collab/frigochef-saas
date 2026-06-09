@@ -11,8 +11,9 @@ export async function POST(req: Request) {
 
     const items = await analyzeFridgeImage(image);
     return NextResponse.json({ items });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Vision API Error:', error);
-    return NextResponse.json({ error: error.message || 'Errore durante l\'analisi dell\'immagine' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Errore durante l\'analisi dell\'immagine';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

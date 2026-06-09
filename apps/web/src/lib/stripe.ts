@@ -3,6 +3,11 @@ import Stripe from 'stripe';
 
 export const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-01-27' as any, // Using latest or desired version
-});
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+export const stripe = stripeSecretKey 
+  ? new Stripe(stripeSecretKey, {
+      // @ts-expect-error - Future API version might not be in current types
+      apiVersion: '2026-04-22.dahlia',
+    })
+  : null;

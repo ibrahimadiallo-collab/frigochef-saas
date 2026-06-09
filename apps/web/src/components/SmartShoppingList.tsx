@@ -10,7 +10,7 @@ interface SmartShoppingListProps {
 }
 
 export default function SmartShoppingList({ recipeIngredients, userId }: SmartShoppingListProps) {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<ShoppingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

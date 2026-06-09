@@ -6,7 +6,10 @@ import FridgeInput from '@/components/FridgeInput';
 import RecipeCard from '@/components/RecipeCard';
 import ExpirationTracker from '@/components/ExpirationTracker';
 import ReferralDashboard from '@/components/ReferralDashboard';
-import { Sparkles, Loader2, ArrowRight, ChefHat } from 'lucide-react';
+import MealPlanner from '@/components/MealPlanner';
+import { Sparkles, Loader2, ArrowRight, ChefHat, Calendar } from 'lucide-react';
+import { authHeader } from '@/lib/supabase';
+import { Recipe, MealPlan } from '@/lib/ai';
 
 export default function Home() {
   const [tags, setTags] = useState<string[]>([]);
@@ -14,7 +17,9 @@ export default function Home() {
   const [mealType, setMealType] = useState('dinner');
   const [time, setTime] = useState('normal');
   const [isLoading, setIsLoading] = useState(false);
-  const [recipe, setRecipe] = useState<any>(null);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPantryLoading, setIsPantryLoading] = useState(true);
 
@@ -22,7 +27,7 @@ export default function Home() {
   useEffect(() => {
     async function loadPantry() {
       try {
-        const res = await fetch('/api/pantry');
+        const res = await fetch('/api/pantry', { headers: await authHeader() });
         if (res.ok) {
           const data = await res.json();
           if (data.ingredients) setTags(data.ingredients);
@@ -44,7 +49,7 @@ export default function Home() {
       try {
         await fetch('/api/pantry', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
           body: JSON.stringify({ ingredients: tags }),
         });
       } catch (err) {
@@ -76,10 +81,38 @@ export default function Home() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setRecipe(data);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      setError(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePlanGenerate = async () => {
+    if (tags.length < 2) {
+      setError('Add some ingredients to plan your week.');
+      return;
+    }
+
+    setIsPlanLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/meal-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients: tags.join(', ') }),
+      });
+      
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMealPlan(data);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to generate meal plan.';
+      setError(message);
+    } finally {
+      setIsPlanLoading(false);
     }
   };
 
@@ -180,13 +213,36 @@ export default function Home() {
                   )}
                 </span>
               </button>
+
+              <button 
+                onClick={handlePlanGenerate}
+                disabled={isPlanLoading}
+                className="w-full bg-white/5 border border-white/10 h-14 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all hover:bg-white/10 active:scale-[0.98] text-white/60 hover:text-white"
+              >
+                {isPlanLoading ? (
+                  <>
+                    <Loader2 className="animate-spin text-emerald-500" size={18} />
+                    Planning Week...
+                  </>
+                ) : (
+                  <>
+                    <Calendar size={18} /> Generate Weekly Plan
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Recipe Result Area */}
-            <div className="pt-12">
+            {/* Result Area */}
+            <div className="pt-12 space-y-12">
               {recipe && (
                 <div className="animate-in fade-in zoom-in-95 duration-500">
                   <RecipeCard recipe={recipe} />
+                </div>
+              )}
+
+              {mealPlan && (
+                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <MealPlanner plan={mealPlan} />
                 </div>
               )}
             </div>

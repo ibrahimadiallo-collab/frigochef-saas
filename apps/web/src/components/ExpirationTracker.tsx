@@ -85,7 +85,7 @@ export default function ExpirationTracker({ items }: ExpirationTrackerProps) {
 
       <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
         <p className="text-[10px] font-medium text-emerald-500/60 leading-relaxed italic">
-          "Pro tip: Use the {sortedItems[0].name} today in a quick express recipe to reduce waste."
+          &quot;Pro tip: Use the {sortedItems[0].name} today in a quick express recipe to reduce waste.&quot;
         </p>
       </div>
     </div>

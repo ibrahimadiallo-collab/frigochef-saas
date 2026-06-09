@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
 
 export async function GET(req: Request) {
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getUserFromRequest(req);
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('pantry')
       .select('ingredients')
       .eq('user_id', user.id)
@@ -20,23 +20,24 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ ingredients: data?.ingredients || [] });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Pantry GET Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
+    const user = await getUserFromRequest(req);
+
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { ingredients } = await req.json();
 
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('pantry')
       .upsert({ 
         user_id: user.id, 
@@ -47,8 +48,9 @@ export async function POST(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Pantry POST Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

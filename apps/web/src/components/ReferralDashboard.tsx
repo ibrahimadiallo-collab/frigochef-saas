@@ -2,17 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Share2, Users, Gift, Copy, CheckCircle2, Trophy } from 'lucide-react';
+import { Gift, Copy, CheckCircle2, Trophy } from 'lucide-react';
+import { authHeader } from '@/lib/supabase';
+
+interface ReferralStats {
+  referralCode: string;
+  inviteCount: number;
+  rewardLevel: 'Standard' | 'Premium';
+}
 
 export default function ReferralDashboard() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<ReferralStats | null>(null);
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/referrals');
+        const res = await fetch('/api/referrals', { headers: await authHeader() });
         if (res.ok) {
           const data = await res.json();
           setStats(data);
@@ -27,6 +34,7 @@ export default function ReferralDashboard() {
   }, []);
 
   const copyLink = () => {
+    if (!stats) return;
     const link = `${window.location.origin}?ref=${stats.referralCode}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
@@ -93,7 +101,7 @@ export default function ReferralDashboard() {
           </div>
           <div className="flex items-center gap-3 text-white/30 italic text-[10px] font-medium">
             <Gift size={14} className="text-emerald-500/40" />
-            "5 invites unlocks Lifetime AI Vision processing."
+            &quot;5 invites unlocks Lifetime AI Vision processing.&quot;
           </div>
         </div>
       </div>

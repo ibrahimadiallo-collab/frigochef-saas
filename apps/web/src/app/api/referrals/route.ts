@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
 
 function generateCode(length = 8) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -12,43 +12,45 @@ function generateCode(length = 8) {
 
 export async function GET(req: Request) {
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // 1. Get user's referral code
-    let { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('referral_code')
       .eq('id', user.id)
       .single();
 
+    let currentProfile = profile;
+
     // 2. If no code, create one
-    if (!profile?.referral_code) {
+    if (!currentProfile?.referral_code) {
       const newCode = generateCode();
-      const { data: updatedProfile, error: updateError } = await supabase
+      const { data: updatedProfile, error: updateError } = await supabaseAdmin
         .from('profiles')
         .upsert({ id: user.id, referral_code: newCode })
         .select()
         .single();
-      
+
       if (updateError) throw updateError;
-      profile = updatedProfile;
+      currentProfile = updatedProfile;
     }
 
     // 3. Get referral stats
-    const { count, error: countError } = await supabase
+    const { count } = await supabaseAdmin
       .from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('referred_by', profile.referral_code);
+      .eq('referred_by', currentProfile?.referral_code);
 
     return NextResponse.json({
-      referralCode: profile.referral_code,
+      referralCode: currentProfile?.referral_code,
       inviteCount: count || 0,
       rewardLevel: (count || 0) >= 5 ? 'Premium' : 'Standard'
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Referral API Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
   }
 }

@@ -18,7 +18,7 @@ export async function generateSmartShoppingList(recipeIngredients: string[], use
     .eq('user_id', userId)
     .single();
 
-  const pantryIngredients = (pantryData?.ingredients || []) as any[];
+  const pantryIngredients = (pantryData?.ingredients || []) as { name: string }[];
   const pantryNames = pantryIngredients.map(i => i.name.toLowerCase());
 
   // 2. Filtra cosa manca (logica semplice di matching stringhe)
