@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, X, Instagram, Sparkles, Share2, Link as LinkIcon, Check } from 'lucide-react';
+import { Download, X, Sparkles, Share2, Link as LinkIcon, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Recipe {
@@ -28,8 +28,32 @@ interface SocialShareProps {
 
 export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProps) {
   const storyRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [previewScale, setPreviewScale] = useState(0.3);
+
+  useEffect(() => {
+    if (!isOpen || !previewContainerRef.current) return;
+
+    const updateScale = () => {
+      const container = previewContainerRef.current;
+      if (container) {
+        const containerWidth = container.offsetWidth;
+        setPreviewScale(containerWidth / 1080);
+      }
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    // Short delay to ensure DOM is ready
+    const timer = setTimeout(updateScale, 100);
+
+    return () => {
+      window.removeEventListener('resize', updateScale);
+      clearTimeout(timer);
+    };
+  }, [isOpen]);
 
   const exportImage = async () => {
     if (!storyRef.current) return;
@@ -82,12 +106,15 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
           >
             {/* Preview Section */}
             <div className="flex-1 p-8 md:p-12 border-b md:border-b-0 md:border-r border-white/10 flex flex-col items-center justify-center bg-black/40">
-              <div className="relative w-full aspect-[9/16] max-h-[60vh] md:max-h-[70vh] shadow-2xl rounded-2xl overflow-hidden border border-white/10">
+              <div 
+                ref={previewContainerRef}
+                className="relative w-full aspect-[9/16] max-h-[60vh] md:max-h-[70vh] shadow-2xl rounded-2xl overflow-hidden border border-white/10"
+              >
                 {/* The actual element to be captured (Hidden from viewport scaling, scaled for preview) */}
                 <div 
                   ref={storyRef}
                   className="absolute inset-0 w-[1080px] h-[1920px] bg-neutral-950 text-white p-16 flex flex-col origin-top-left"
-                  style={{ transform: 'scale(var(--preview-scale, 1))' }}
+                  style={{ transform: `scale(${previewScale})` }}
                 >
                   {/* Background Accents */}
                   <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/10 blur-[120px] rounded-full -mr-96 -mt-96" />
@@ -194,7 +221,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                 <div className="space-y-4">
                   <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
                     <div className="flex items-center gap-3 text-emerald-500 mb-2">
-                      <Instagram size={16} />
+                      <Sparkles size={16} />
                       <span className="text-[10px] font-bold uppercase tracking-widest">Instagram Story</span>
                     </div>
                     <p className="text-xs text-white/60 leading-relaxed">
@@ -246,36 +273,6 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
               </div>
             </div>
           </motion.div>
-
-          <style jsx>{`
-            .relative.w-full.aspect-\\[9\\/16\\] {
-              --preview-scale: calc(min(60vh, 70vh) / 1920);
-            }
-            @media (min-width: 768px) {
-              .relative.w-full.aspect-\\[9\\/16\\] {
-                --preview-scale: calc(min(70vh) / 1920);
-              }
-            }
-            /* Actual scale calculation for the container width */
-            :global(.relative.w-full.aspect-\\[9\\/16\\] > div) {
-              width: 1080px;
-              height: 1920px;
-              transform: scale(calc(var(--preview-container-width) / 1080));
-              transform-origin: top left;
-            }
-          `}</style>
-          
-          <script dangerouslySetInnerHTML={{ __html: `
-            function updateScale() {
-              const preview = document.querySelector('.aspect-\\\\[9\\\\/16\\\\]');
-              if (preview) {
-                const rect = preview.getBoundingClientRect();
-                preview.style.setProperty('--preview-container-width', rect.width + 'px');
-              }
-            }
-            window.addEventListener('resize', updateScale);
-            setTimeout(updateScale, 0);
-          `}} />
         </div>
       )}
     </AnimatePresence>

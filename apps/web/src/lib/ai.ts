@@ -16,9 +16,9 @@ export interface Recipe {
 
 export interface DayPlan {
   giorno: string;
-  colazione: Partial<Recipe>;
-  pranzo: Partial<Recipe>;
-  cena: Partial<Recipe>;
+  colazione: { nome: string; tempo: string; calorie: number };
+  pranzo: { nome: string; tempo: string; calorie: number };
+  cena: { nome: string; tempo: string; calorie: number };
 }
 
 export type MealPlan = DayPlan[];

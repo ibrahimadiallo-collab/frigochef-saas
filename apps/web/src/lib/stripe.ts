@@ -5,9 +5,10 @@ export const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHAB
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
+// Castiamo a 'any' per bypassare il mismatch tra i tipi del pacchetto e l'API desiderata
+// Questo permette al progetto di compilare mentre garantisce l'uso della versione stabile.
 export const stripe = stripeSecretKey 
   ? new Stripe(stripeSecretKey, {
-      // @ts-expect-error - Future API version might not be in current types
-      apiVersion: '2026-04-22.dahlia',
+      apiVersion: '2025-01-27.acacia' as any,
     })
   : null;

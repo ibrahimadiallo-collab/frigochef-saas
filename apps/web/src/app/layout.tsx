@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Rimosso next/font/google per evitare errori di build dovuti alla connessione di rete
+// che impedisce il download dei font durante la compilazione.
+// Utilizzeremo font di sistema premium (Inter, Satoshi fallback).
 
 export const metadata: Metadata = {
   title: "FrigoChef — The AI Kitchen Assistant",
@@ -23,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="antialiased bg-[#020202] text-[#f5f5f5]">
+    <html lang="it">
+      <body className="antialiased bg-[#020202] text-[#f5f5f5] font-sans">
         {children}
       </body>
     </html>

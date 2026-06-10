@@ -12,6 +12,13 @@ export async function POST(req: Request) {
 
     const recipe = await generateRecipe(ingredients, mealType, time);
     const user = await getUserFromRequest(req);
+    
+    // Genera uno slug semplice dal nome della ricetta
+    const slug = recipe.nome
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
 
     // Salva la ricetta nel database pubblico per SEO e condivisione
     const { data: savedRecipe, error: saveError } = await supabaseAdmin
@@ -20,6 +27,7 @@ export async function POST(req: Request) {
         {
           user_id: user?.id,
           recipe_data: recipe,
+          slug,
           is_public: true
         }
       ])

@@ -58,7 +58,13 @@ export default function Navbar() {
       </Link>
       
       <div className="flex items-center gap-8">
-        <button className="hidden md:block text-xs font-semibold tracking-widest uppercase text-white/40 hover:text-white transition-colors">
+        <Link 
+          href="/recipes" 
+          className="hidden md:block text-[10px] font-bold tracking-[0.2em] uppercase text-white/40 hover:text-emerald-500 transition-colors"
+        >
+          My Recipes
+        </Link>
+        <button className="hidden md:block text-[10px] font-bold tracking-[0.2em] uppercase text-white/40 hover:text-white transition-colors">
           Philosophy
         </button>
         
