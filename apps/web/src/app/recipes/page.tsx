@@ -3,29 +3,38 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import RecipeCard from '@/components/RecipeCard';
-import { supabase, authHeader } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Loader2, ChefHat, Sparkles, ArrowRight, BookOpen } from 'lucide-react';
 import Link from 'next/link';
+import { Recipe } from '@/lib/ai';
+import { User } from '@supabase/supabase-js';
+
+interface SavedRecipe {
+  id: string;
+  recipe_data: Recipe;
+  user_id: string;
+  created_at: string;
+}
 
 export default function MyRecipesPage() {
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     async function loadRecipes() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      setUser(authUser);
 
-      if (user) {
+      if (authUser) {
         const { data, error } = await supabase
           .from('recipes')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', authUser.id)
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setRecipes(data);
+          setRecipes(data as SavedRecipe[]);
         }
       }
       setIsLoading(false);
@@ -57,7 +66,7 @@ export default function MyRecipesPage() {
               My Recipes
             </h1>
             <p className="text-white/40 text-lg max-w-lg">
-              Every masterpiece you've generated, saved in one place.
+              Every masterpiece you&apos;ve generated, saved in one place.
             </p>
           </header>
 
