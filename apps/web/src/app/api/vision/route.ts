@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { analyzeFridgeImage } from '@/lib/vision';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const { image } = await req.json();

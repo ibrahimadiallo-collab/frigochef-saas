@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
 
+export const dynamic = 'force-dynamic';
+
 function generateCode(length = 8) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
