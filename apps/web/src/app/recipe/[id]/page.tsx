@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface RecipePageProps {
   params: Promise<{ id: string }>;
 }
