@@ -8,7 +8,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  : new Proxy({} as any, {
+  : new Proxy({} as Record<string, unknown>, {
       get: () => new Proxy(() => ({}), {
         get: () => () => ({ data: { session: null, user: null }, error: null })
       })
