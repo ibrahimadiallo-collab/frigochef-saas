@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { getUserFromRequest } from '@/lib/supabase-admin';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
   try {
     const user = await getUserFromRequest(req);
