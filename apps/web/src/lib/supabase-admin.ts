@@ -10,6 +10,7 @@ export const supabaseAdmin = (supabaseUrl && serviceRoleKey)
   ? createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   : new Proxy({} as any, {
       get: () => new Proxy(() => ({}), {
         get: () => () => ({ data: { user: null }, error: null })
