@@ -3,18 +3,35 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Se le chiavi mancano (es. durante la build su Vercel), creiamo un proxy che non crasha
-// ma restituisce funzioni vuote o oggetti nulli.
-export const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  : new Proxy({} as Record<string, unknown>, {
-      get: () => new Proxy(() => ({}), {
-        get: () => () => ({ data: { session: null, user: null }, error: null })
-      })
-    });
+// Implementazione sicura per evitare crash se le chiavi mancano (es. durante la build)
+const createSafeSupabaseClient = () => {
+  if (supabaseUrl && supabaseAnonKey) {
+    return createClient(supabaseUrl, supabaseAnonKey);
+  }
 
-// Client helper: Authorization header costruito dalla sessione corrente del browser.
+  // Fallback dummy object se le chiavi mancano
+  return {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      signInWithOtp: async () => ({ data: { user: null, session: null }, error: null }),
+      signOut: async () => ({ error: null }),
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: null, error: null }),
+          order: () => ({ data: [], error: null }),
+        }),
+      }),
+      upsert: async () => ({ data: null, error: null }),
+    }),
+  } as any;
+};
+
+export const supabase = createSafeSupabaseClient();
+
 export async function authHeader(): Promise<Record<string, string>> {
   if (!supabaseUrl || !supabaseAnonKey) return {};
   try {
