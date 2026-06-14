@@ -275,11 +275,14 @@ export default function Home() {
                     const res = await fetch('/api/stripe/checkout', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-                      body: JSON.stringify({ priceId: 'price_placeholder' })
+                      body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_placeholder' })
                     });
                     const data = await res.json();
                     if (data.url) window.location.href = data.url;
-                    else alert("Configurazione Stripe in corso. Riprova tra poco.");
+                    else {
+                      console.error("Stripe Error:", data.error);
+                      alert("Configurazione Stripe in corso. Assicurati di aver inserito le chiavi API su Vercel.");
+                    }
                   }}
                   className="w-full h-14 bg-white text-black rounded-2xl font-bold hover:bg-emerald-500 transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
