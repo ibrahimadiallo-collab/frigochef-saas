@@ -64,8 +64,14 @@ export default function Navbar() {
         >
           My Recipes
         </Link>
-        <button className="hidden md:block text-[10px] font-bold tracking-[0.2em] uppercase text-white/40 hover:text-white transition-colors">
-          Philosophy
+        <button 
+          onClick={() => {
+            const el = document.getElementById('pricing');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="hidden md:block text-[10px] font-bold tracking-[0.2em] uppercase text-emerald-500 hover:text-emerald-400 transition-colors"
+        >
+          Passa a Pro
         </button>
         
         {user ? (

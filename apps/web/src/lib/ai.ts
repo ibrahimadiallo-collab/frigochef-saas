@@ -66,12 +66,29 @@ Rispondi SOLO con JSON valido, zero testo extra:
 
   const data = await response.json();
   if (!data.content || !data.content[0]) {
-    throw new Error('API error: ' + JSON.stringify(data));
+    throw new Error('AI Provider error: ' + JSON.stringify(data));
   }
 
   const text = data.content.map((b: { text?: string }) => b.text || '').join('');
   const clean = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  
+  try {
+    const parsed = JSON.parse(clean);
+    // Garantiamo che i campi obbligatori esistano per evitare crash client-side
+    return {
+      nome: parsed.nome || 'Ricetta AI',
+      tempo: parsed.tempo || '20 min',
+      porzioni: parsed.porzioni || '2 persone',
+      difficolta: parsed.difficolta || 'Media',
+      nutrizione: parsed.nutrizione || { calorie: 0, proteine: '0g', carboidrati: '0g', grassi: '0g' },
+      sostenibilita: parsed.sostenibilita || 50,
+      ingredienti: Array.isArray(parsed.ingredienti) ? parsed.ingredienti : [],
+      passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : []
+    };
+  } catch (err) {
+    console.error("Failed to parse AI Recipe JSON:", clean);
+    throw new Error("L'intelligenza artificiale ha generato un formato non valido. Riprova.");
+  }
 }
 
 export async function generateMealPlan(ingredients: string): Promise<MealPlan> {

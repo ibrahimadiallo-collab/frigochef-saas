@@ -256,6 +256,38 @@ export default function Home() {
 
             <ReferralDashboard />
 
+            <div id="pricing" className="bg-gradient-to-br from-emerald-500/20 to-blue-500/10 border border-emerald-500/20 rounded-[40px] p-8 space-y-6 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/10 blur-[60px] rounded-full" />
+              <div className="relative z-10 space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold tracking-widest uppercase border border-emerald-500/30">
+                  Limited Offer
+                </div>
+                <h3 className="text-2xl font-bold tracking-tight">Diventa FrigoChef Pro</h3>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  Sblocca scansioni illimitate, calcolo dei nutrienti avanzato e supporto per tutta la famiglia.
+                </p>
+                <div className="pt-4 flex items-end gap-2">
+                  <span className="text-4xl font-black">€9.99</span>
+                  <span className="text-white/40 text-sm mb-1">/mese</span>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const res = await fetch('/api/stripe/checkout', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+                      body: JSON.stringify({ priceId: 'price_placeholder' })
+                    });
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                    else alert("Configurazione Stripe in corso. Riprova tra poco.");
+                  }}
+                  className="w-full h-14 bg-white text-black rounded-2xl font-bold hover:bg-emerald-500 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  PASSA A PRO ORA
+                </button>
+              </div>
+            </div>
+
             {!recipe && expiryItems.length === 0 && (
               <div className="relative aspect-square md:aspect-auto md:h-[600px] bg-white/[0.02] border border-white/5 rounded-[48px] flex flex-col items-center justify-center p-12 text-center overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
