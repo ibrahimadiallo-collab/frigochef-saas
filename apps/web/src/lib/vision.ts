@@ -10,7 +10,7 @@ export async function analyzeFridgeImage(base64Image: string) {
   const [header, data] = base64Image.split(',');
   const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
   const prompt = `Look at this photo of a fridge or ingredients. 
 Identify all the edible items you can see. 
