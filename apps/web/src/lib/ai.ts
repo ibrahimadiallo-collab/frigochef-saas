@@ -1,4 +1,10 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const geminiKey = process.env.GEMINI_API_KEY;
+const genAI = geminiKey ? new GoogleGenerativeAI(geminiKey) : null;
+
 export interface Recipe {
+  id?: string;
   nome: string;
   tempo: string;
   porzioni: string;
@@ -24,6 +30,13 @@ export interface DayPlan {
 export type MealPlan = DayPlan[];
 
 export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
+  if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
+  
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
   const prompt = `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.
 Calcola accuratamente calorie e macro-nutrienti (proteine, carboidrati, grassi).
@@ -33,7 +46,7 @@ Valuta l'impatto di sostenibilità (Sustainability Score 0-100) basandoti su:
 - Impronta carbonica (preferenza ingredienti vegetali/locali).
 - Efficienza energetica della cottura.
 
-Rispondi SOLO con JSON valido, zero testo extra:
+Rispondi SOLO con JSON valido:
 {
   "nome": "Nome del piatto",
   "tempo": "X minuti",
@@ -50,31 +63,12 @@ Rispondi SOLO con JSON valido, zero testo extra:
   "passaggi": ["Passo dettagliato 1", ...]
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  const data = await response.json();
-  if (!data.content || !data.content[0]) {
-    throw new Error('AI Provider error: ' + JSON.stringify(data));
-  }
-
-  const text = data.content.map((b: { text?: string }) => b.text || '').join('');
-  const clean = text.replace(/```json|```/g, '').trim();
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
   
   try {
-    const parsed = JSON.parse(clean);
-    // Garantiamo che i campi obbligatori esistano per evitare crash client-side
+    const parsed = JSON.parse(text);
     return {
       nome: parsed.nome || 'Ricetta AI',
       tempo: parsed.tempo || '20 min',
@@ -86,17 +80,22 @@ Rispondi SOLO con JSON valido, zero testo extra:
       passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : []
     };
   } catch (err) {
-    console.error("Failed to parse AI Recipe JSON:", clean);
-    throw new Error("L'intelligenza artificiale ha generato un formato non valido. Riprova.");
+    console.error("Gemini Parsing Error:", text);
+    throw new Error("L'IA ha generato un formato non valido. Riprova.");
   }
 }
 
 export async function generateMealPlan(ingredients: string): Promise<MealPlan> {
+  if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
+
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: { responseMimeType: "application/json" }
+  });
+
   const prompt = `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
 Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e sostenibile.
-Cerca di usare il più possibile quello che l'utente ha già, aggiungendo il minimo indispensabile.
-
-Rispondi SOLO con un array JSON di 7 oggetti, zero testo extra. 
+Rispondi SOLO con un array JSON di 7 oggetti.
 Ogni oggetto deve avere:
 {
   "giorno": "Lunedì",
@@ -105,22 +104,14 @@ Ogni oggetto deve avere:
   "cena": { "nome": "...", "tempo": "...", "calorie": 0 }
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY!,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20240620',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  const data = await response.json();
-  const text = data.content.map((b: { text?: string }) => b.text || '').join('');
-  const clean = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+  
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("Gemini Meal Plan Error:", text);
+    throw new Error("Errore durante la generazione del piano alimentare.");
+  }
 }
