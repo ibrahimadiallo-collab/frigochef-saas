@@ -32,21 +32,13 @@ export type MealPlan = DayPlan[];
 export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
   if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
   
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" }
-  });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.
 Calcola accuratamente calorie e macro-nutrienti (proteine, carboidrati, grassi).
 
-Valuta l'impatto di sostenibilità (Sustainability Score 0-100) basandoti su:
-- Riduzione sprechi (usa ingredienti a rischio scadenza se menzionati).
-- Impronta carbonica (preferenza ingredienti vegetali/locali).
-- Efficienza energetica della cottura.
-
-Rispondi SOLO con JSON valido:
+Rispondi SOLO con JSON valido, senza markdown, senza backticks:
 {
   "nome": "Nome del piatto",
   "tempo": "X minuti",
@@ -68,7 +60,8 @@ Rispondi SOLO con JSON valido:
   const text = response.text();
   
   try {
-    const parsed = JSON.parse(text);
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
     return {
       nome: parsed.nome || 'Ricetta AI',
       tempo: parsed.tempo || '20 min',
@@ -88,14 +81,11 @@ Rispondi SOLO con JSON valido:
 export async function generateMealPlan(ingredients: string): Promise<MealPlan> {
   if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
 
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" }
-  });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   const prompt = `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
 Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e sostenibile.
-Rispondi SOLO con un array JSON di 7 oggetti.
+Rispondi SOLO con un array JSON di 7 oggetti, senza markdown.
 Ogni oggetto deve avere:
 {
   "giorno": "Lunedì",
@@ -109,7 +99,8 @@ Ogni oggetto deve avere:
   const text = response.text();
   
   try {
-    return JSON.parse(text);
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
   } catch (err) {
     console.error("Gemini Meal Plan Error:", text);
     throw new Error("Errore durante la generazione del piano alimentare.");
