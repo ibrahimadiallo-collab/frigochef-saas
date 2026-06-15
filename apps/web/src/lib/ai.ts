@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const geminiKey = process.env.GEMINI_API_KEY;
-const genAI = geminiKey ? new GoogleGenerativeAI(geminiKey) : null;
+const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface Recipe {
   id?: string;
@@ -30,15 +30,15 @@ export interface DayPlan {
 export type MealPlan = DayPlan[];
 
 export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
-  if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
+  if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
   
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  const prompt = `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.5-flash',
+    contents: `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.
 Calcola accuratamente calorie e macro-nutrienti (proteine, carboidrati, grassi).
 
-Rispondi SOLO con JSON valido, senza markdown, senza backticks:
+Rispondi SOLO con JSON valido:
 {
   "nome": "Nome del piatto",
   "tempo": "X minuti",
@@ -53,11 +53,10 @@ Rispondi SOLO con JSON valido, senza markdown, senza backticks:
   "sostenibilita": 0,
   "ingredienti": ["quantità ingrediente", ...],
   "passaggi": ["Passo dettagliato 1", ...]
-}`;
+}`
+  });
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
+  const text = response.text;
   
   try {
     const clean = text.replace(/```json|```/g, '').trim();
@@ -73,36 +72,35 @@ Rispondi SOLO con JSON valido, senza markdown, senza backticks:
       passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : []
     };
   } catch (err) {
-    console.error("Gemini Parsing Error:", text);
+    console.error("Gemini 3.5 Parsing Error:", text);
     throw new Error("L'IA ha generato un formato non valido. Riprova.");
   }
 }
 
 export async function generateMealPlan(ingredients: string): Promise<MealPlan> {
-  if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
+  if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  const prompt = `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
+  const response = await ai.models.generateContent({
+    model: 'gemini-3.5-flash',
+    contents: `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
 Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e sostenibile.
-Rispondi SOLO con un array JSON di 7 oggetti, senza markdown.
+Rispondi SOLO con un array JSON di 7 oggetti.
 Ogni oggetto deve avere:
 {
   "giorno": "Lunedì",
   "colazione": { "nome": "...", "tempo": "...", "calorie": 0 },
   "pranzo": { "nome": "...", "tempo": "...", "calorie": 0 },
   "cena": { "nome": "...", "tempo": "...", "calorie": 0 }
-}`;
+}`
+  });
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
+  const text = response.text;
   
   try {
     const clean = text.replace(/```json|```/g, '').trim();
     return JSON.parse(clean);
   } catch (err) {
-    console.error("Gemini Meal Plan Error:", text);
+    console.error("Gemini 3.5 Meal Plan Error:", text);
     throw new Error("Errore durante la generazione del piano alimentare.");
   }
 }
