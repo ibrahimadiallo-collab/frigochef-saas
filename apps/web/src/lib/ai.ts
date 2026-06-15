@@ -32,7 +32,7 @@ export type MealPlan = DayPlan[];
 export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
   if (!genAI) throw new Error("GEMINI_API_KEY non configurata.");
   
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
   const prompt = `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.
