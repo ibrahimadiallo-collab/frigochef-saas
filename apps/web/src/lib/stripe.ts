@@ -1,16 +1,7 @@
-import { loadStripe } from '@stripe/stripe-js';
+import 'server-only';
 import Stripe from 'stripe';
-
-export const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-// Castiamo a 'any' per bypassare il mismatch tra i tipi del pacchetto e l'API desiderata
-export const stripe = stripeSecretKey 
-  ? new Stripe(stripeSecretKey, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      apiVersion: '2025-01-27.acacia' as any,
-    })
-  : null;
+/** Client Stripe server-side (null se STRIPE_SECRET_KEY non è configurata). */
+export const stripe: Stripe | null = stripeSecretKey ? new Stripe(stripeSecretKey) : null;

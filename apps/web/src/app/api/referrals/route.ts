@@ -1,58 +1,48 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
+import { getAuthContext } from '@/lib/supabase/server';
+import { serverError, unauthorized } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
-function generateCode(length = 8) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+function generateCode(length = 8): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
 export async function GET(req: Request) {
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await getAuthContext(req);
+    if (!auth) return unauthorized();
+    const { supabase, user } = auth;
 
-    // 1. Get user's referral code
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error } = await supabase
       .from('profiles')
       .select('referral_code')
       .eq('id', user.id)
-      .single();
+      .maybeSingle<{ referral_code: string | null }>();
+    if (error) throw error;
 
-    let currentProfile = profile;
-
-    // 2. If no code, create one
-    if (!currentProfile?.referral_code) {
-      const newCode = generateCode();
-      const { data: updatedProfile, error: updateError } = await supabaseAdmin
+    let referralCode = profile?.referral_code ?? null;
+    if (!referralCode) {
+      referralCode = generateCode();
+      const { error: updateError } = await supabase
         .from('profiles')
-        .upsert({ id: user.id, referral_code: newCode })
-        .select()
-        .single();
-
+        .update({ referral_code: referralCode })
+        .eq('id', user.id);
       if (updateError) throw updateError;
-      currentProfile = updatedProfile;
     }
 
-    // 3. Get referral stats
-    const { count } = await supabaseAdmin
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('referred_by', currentProfile?.referral_code);
+    // Conteggio aggregato via RPC opzionale: con la RLS l'utente non può leggere i profili altrui.
+    const { data: count } = await supabase.rpc('referral_count', { code: referralCode });
+    const inviteCount = typeof count === 'number' ? count : 0;
 
     return NextResponse.json({
-      referralCode: currentProfile?.referral_code,
-      inviteCount: count || 0,
-      rewardLevel: (count || 0) >= 5 ? 'Premium' : 'Standard'
+      referralCode,
+      inviteCount,
+      rewardLevel: inviteCount >= 5 ? 'Premium' : 'Standard',
     });
-
   } catch (error) {
-    console.error('Referral API Error:', error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+    return serverError('referrals', error, 'Could not load your referral info.');
   }
 }

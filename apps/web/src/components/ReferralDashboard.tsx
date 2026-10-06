@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Gift, Copy, CheckCircle2, Trophy } from 'lucide-react';
-import { authHeader } from '@/lib/supabase';
 
 interface ReferralStats {
   referralCode: string;
@@ -19,7 +18,7 @@ export default function ReferralDashboard() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/referrals', { headers: await authHeader() });
+        const res = await fetch('/api/referrals');
         if (res.ok) {
           const data = await res.json();
           setStats(data);
@@ -35,7 +34,7 @@ export default function ReferralDashboard() {
 
   const copyLink = () => {
     if (!stats) return;
-    const link = `${window.location.origin}?ref=${stats.referralCode}`;
+    const link = `${window.location.origin}/signup?ref=${stats.referralCode}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -45,7 +44,7 @@ export default function ReferralDashboard() {
   if (!stats) return null;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+    <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30 flex items-center gap-2">
           <Trophy size={12} /> Viral Growth Hub
@@ -73,7 +72,7 @@ export default function ReferralDashboard() {
           <p className="text-[10px] font-bold tracking-widest uppercase text-white/20">Your Unique Link</p>
           <div className="flex gap-2">
             <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-5 flex items-center text-sm font-mono text-white/60 overflow-hidden">
-              <span className="truncate whitespace-nowrap">frigochef.ai?ref={stats.referralCode}</span>
+              <span className="truncate whitespace-nowrap">frigochef.ai/signup?ref={stats.referralCode}</span>
             </div>
             <button 
               onClick={copyLink}
@@ -105,6 +104,6 @@ export default function ReferralDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

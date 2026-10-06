@@ -235,3 +235,16 @@ BEGIN
       AND COALESCE(CASE WHEN jsonb_typeof(elem) = 'string' THEN elem #>> '{}' ELSE elem->>'name' END, '') <> '';
   END IF;
 END $$;
+
+-- ---------------------------------------------------------------------
+-- 8. REFERRAL: conteggio aggregato (la RLS impedisce di leggere i profili altrui)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.referral_count(code TEXT)
+RETURNS INTEGER AS $$
+  SELECT COUNT(*)::INTEGER FROM public.profiles
+  WHERE referred_by = code
+    AND code = (SELECT referral_code FROM public.profiles WHERE id = auth.uid());
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+REVOKE ALL ON FUNCTION public.referral_count(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.referral_count(TEXT) TO authenticated;

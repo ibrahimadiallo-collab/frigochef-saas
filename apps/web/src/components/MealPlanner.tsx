@@ -1,91 +1,72 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Clock, Flame, ChevronRight, Sparkles, ChefHat } from 'lucide-react';
-import { MealPlan } from '@/lib/ai';
+import { motion } from 'framer-motion';
+import { Clock, Coffee, Flame, Moon, Sun } from 'lucide-react';
+import type { MealPlanDay } from '@/types';
+import { Card } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 
-interface MealPlannerProps {
-  plan: MealPlan;
-}
+const MEALS = [
+  { key: 'breakfast', label: 'Breakfast', icon: Coffee, color: 'text-amber-300' },
+  { key: 'lunch', label: 'Lunch', icon: Sun, color: 'text-emerald-300' },
+  { key: 'dinner', label: 'Dinner', icon: Moon, color: 'text-sky-300' },
+] as const;
 
-export default function MealPlanner({ plan }: MealPlannerProps) {
-  const [activeDay, setActiveDay] = useState(0);
-
-  const day = plan[activeDay];
+/** Piano settimanale: selettore del giorno + 3 pasti. */
+export default function MealPlanner({ days }: { days: MealPlanDay[] }) {
+  const [active, setActive] = useState(0);
+  const day = days[active];
+  if (!day) return null;
+  const dayCalories = day.breakfast.calories + day.lunch.calories + day.dinner.calories;
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-[40px] overflow-hidden backdrop-blur-2xl">
-      {/* Header */}
-      <div className="p-8 border-b border-white/5 bg-gradient-to-br from-emerald-500/5 to-transparent flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h3 className="text-2xl font-black text-white flex items-center gap-3">
-            <Calendar className="text-emerald-500" />
-            Weekly Meal Planner
-          </h3>
-          <p className="text-sm text-white/40 mt-1 font-medium">Il tuo piano alimentare personalizzato basato sulla dispensa.</p>
-        </div>
-        
-        <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/5">
-          {plan.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setActiveDay(i)}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
-                activeDay === i 
-                ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' 
-                : 'text-white/40 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {['L', 'M', 'M', 'G', 'V', 'S', 'D'][i]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-8 grid md:grid-cols-3 gap-6">
-        {[
-          { type: 'Colazione', data: day.colazione, icon: <Sparkles size={18} className="text-amber-400" /> },
-          { type: 'Pranzo', data: day.pranzo, icon: <ChefHat size={18} className="text-emerald-400" /> },
-          { type: 'Cena', data: day.cena, icon: <Clock size={18} className="text-blue-400" /> }
-        ].map((meal, i) => (
-          <div key={i} className="group relative bg-white/5 border border-white/5 rounded-[32px] p-6 hover:border-emerald-500/30 transition-all hover:translate-y-[-4px]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                {meal.icon}
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">{meal.type}</span>
-            </div>
-
-            <h4 className="text-lg font-bold text-white mb-4 line-clamp-2 leading-tight group-hover:text-emerald-400 transition-colors">
-              {meal.data.nome}
-            </h4>
-
-            <div className="flex items-center gap-4 mt-auto">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-white/60">
-                <Clock size={14} className="text-white/20" />
-                {meal.data.tempo}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-white/60">
-                <Flame size={14} className="text-white/20" />
-                {meal.data.calorie} kcal
-              </div>
-            </div>
-
-            <button className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all border border-white/10 hover:bg-emerald-500 hover:text-black hover:border-emerald-500">
-              <ChevronRight size={18} />
-            </button>
-          </div>
+    <Card className="overflow-hidden">
+      <div className="flex gap-1 overflow-x-auto border-b border-white/5 p-2">
+        {days.map((d, i) => (
+          <button
+            key={d.day}
+            type="button"
+            onClick={() => setActive(i)}
+            className={cn(
+              'relative min-w-[64px] flex-1 rounded-xl px-3 py-2 text-sm font-medium',
+              active === i ? 'text-black' : 'text-white/50 hover:bg-white/5 hover:text-white',
+            )}
+          >
+            {active === i && <motion.span layoutId="meal-day" className="absolute inset-0 rounded-xl bg-emerald-500" />}
+            <span className="relative">{d.day.slice(0, 3)}</span>
+          </button>
         ))}
       </div>
 
-      {/* Footer / CTA */}
-      <div className="p-6 bg-white/[0.02] border-t border-white/5 flex items-center justify-center">
-        <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.3em] flex items-center gap-2">
-          <Sparkles size={12} className="text-emerald-500" />
-          Pro-only: Sync with Shopping List
-        </p>
+      <div className="p-4 sm:p-6">
+        <div className="mb-4 flex items-baseline justify-between">
+          <h3 className="text-lg font-semibold text-white">{day.day}</h3>
+          <span className="text-xs text-white/40">{dayCalories} kcal total</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {MEALS.map(({ key, label, icon: Icon, color }) => {
+            const meal = day[key];
+            return (
+              <motion.div
+                key={`${day.day}-${key}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-white/5 bg-black/30 p-4"
+              >
+                <div className={cn('mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide', color)}>
+                  <Icon className="h-4 w-4" aria-hidden /> {label}
+                </div>
+                <p className="font-medium text-white">{meal.name}</p>
+                <div className="mt-3 flex gap-4 text-xs text-white/50">
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden />{meal.time}</span>
+                  <span className="inline-flex items-center gap-1"><Flame className="h-3.5 w-3.5" aria-hidden />{meal.calories} kcal</span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }

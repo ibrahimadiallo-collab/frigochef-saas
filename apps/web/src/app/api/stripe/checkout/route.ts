@@ -1,42 +1,36 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { stripe } from '@/lib/stripe';
-import { getUserFromRequest } from '@/lib/supabase-admin';
+import { getAuthContext } from '@/lib/supabase/server';
+import { jsonError, readJson, serverError, unauthorized } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
+const checkoutSchema = z.object({ priceId: z.string().trim().min(1).optional() });
+
 export async function POST(req: Request) {
   try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await getAuthContext(req);
+    if (!auth) return unauthorized();
+    if (!stripe) return jsonError('Payments are not available right now.', 503);
 
-    const { priceId } = await req.json();
+    const parsed = checkoutSchema.safeParse((await readJson(req)) ?? {});
+    // Il priceId lato server ha la precedenza: il client non può scegliere prezzi arbitrari.
+    const priceId = process.env.STRIPE_PRICE_ID || (parsed.success ? parsed.data.priceId : undefined);
+    if (!priceId) return jsonError('No subscription plan is configured.', 503);
 
-    if (!stripe) {
-      return NextResponse.json({ error: 'Stripe is not configured' }, { status: 500 });
-    }
-
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId, // E.g. price_12345
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/?canceled=true`,
-      customer_email: user.email,
-      metadata: {
-        userId: user.id,
-      },
+      success_url: `${appUrl}/dashboard?upgraded=true`,
+      cancel_url: `${appUrl}/profile?canceled=true`,
+      customer_email: auth.user.email,
+      metadata: { userId: auth.user.id },
     });
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('Stripe Checkout Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('stripe-checkout', error, 'Could not start checkout. Please try again.');
   }
 }
