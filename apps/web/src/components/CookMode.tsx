@@ -7,6 +7,7 @@ import type { Recipe } from '@/types';
 import { useTimer, formatClock } from '@/hooks/useTimer';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { EVENTS, trackEvent } from '@/lib/analytics';
 
 interface CookModeProps {
   recipe: Recipe;
@@ -27,6 +28,16 @@ export default function CookMode({ recipe, onExit, onDone }: CookModeProps) {
   const timer = useTimer((step?.duration ?? 0) * 60, () => {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate?.([200, 100, 200]);
   });
+
+  useEffect(() => {
+    trackEvent(EVENTS.COOK_MODE_STARTED, { recipeId: recipe.id, steps: steps.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe.id]);
+
+  function finish() {
+    trackEvent(EVENTS.COOK_MODE_COMPLETED, { recipeId: recipe.id, steps: steps.length });
+    onDone();
+  }
 
   // Navigazione da tastiera (frecce).
   useEffect(() => {
@@ -173,7 +184,7 @@ export default function CookMode({ recipe, onExit, onDone }: CookModeProps) {
             <ChevronLeft className="h-5 w-5" aria-hidden /> Previous
           </Button>
           {isLast ? (
-            <Button size="lg" className="flex-1" onClick={onDone}>
+            <Button size="lg" className="flex-1" onClick={finish}>
               <Check className="h-5 w-5" aria-hidden /> Done
             </Button>
           ) : (

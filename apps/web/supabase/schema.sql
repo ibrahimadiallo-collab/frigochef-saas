@@ -262,7 +262,7 @@ REVOKE ALL ON FUNCTION public.referral_count(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.referral_count(TEXT) TO authenticated;
 
 -- ---------------------------------------------------------------------
--- 9. REFERRAL CLAIM: l'utente riscatta un codice, il proprietario riceve 7 giorni di Pro
+-- 9. REFERRAL CLAIM: chi riscatta e il proprietario del codice ricevono 7 giorni di Pro
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.claim_referral(code TEXT)
 RETURNS JSONB
@@ -294,7 +294,8 @@ BEGIN
 
   UPDATE public.profiles
      SET referred_by = (SELECT referral_code FROM public.profiles WHERE id = owner_id),
-         referral_claimed_at = NOW()
+         referral_claimed_at = NOW(),
+         pro_expires_at = GREATEST(COALESCE(pro_expires_at, NOW()), NOW()) + INTERVAL '7 days'
    WHERE id = me.id;
   UPDATE public.profiles
      SET pro_expires_at = GREATEST(COALESCE(pro_expires_at, NOW()), NOW()) + INTERVAL '7 days'

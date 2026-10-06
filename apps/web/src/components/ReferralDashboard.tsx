@@ -1,109 +1,151 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Gift, Copy, CheckCircle2, Trophy } from 'lucide-react';
+import { CheckCircle2, Copy, Gift, Share2, Users } from 'lucide-react';
+import { apiFetch, errorMessage } from '@/lib/http';
+import { EVENTS, trackEvent } from '@/lib/analytics';
+import { REFERRAL_REWARD_DAYS } from '@/lib/pricing';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input, Label } from '@/components/ui/Input';
+import type { ReferralResponse } from '@/app/api/referrals/route';
 
-interface ReferralStats {
-  referralCode: string;
-  inviteCount: number;
-  rewardLevel: 'Standard' | 'Premium';
+interface ReferralDashboardProps {
+  /** Notifica il genitore (es. per ricaricare lo stato Pro) dopo un riscatto riuscito. */
+  onClaimed?: () => void;
 }
 
-export default function ReferralDashboard() {
-  const [stats, setStats] = useState<ReferralStats | null>(null);
-  const [copied, setCopied] = useState(false);
+export default function ReferralDashboard({ onClaimed }: ReferralDashboardProps) {
+  const toast = useToast();
+  const [info, setInfo] = useState<ReferralResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [code, setCode] = useState('');
+  const [isClaiming, setIsClaiming] = useState(false);
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const res = await fetch('/api/referrals');
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch referrals:", err);
-      } finally {
-        setIsLoading(false);
-      }
+  const load = useCallback(async () => {
+    try {
+      setLoadError(null);
+      setInfo(await apiFetch<ReferralResponse>('/api/referrals'));
+    } catch (err) {
+      setLoadError(errorMessage(err));
+    } finally {
+      setIsLoading(false);
     }
-    fetchStats();
   }, []);
 
-  const copyLink = () => {
-    if (!stats) return;
-    const link = `${window.location.origin}/signup?ref=${stats.referralCode}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const link = info && typeof window !== 'undefined' ? `${window.location.origin}/signup?ref=${info.referralCode}` : '';
+
+  async function copyLink() {
+    if (!info) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success('Invite link copied!');
+      trackEvent(EVENTS.REFERRAL_SHARED, { method: 'copy' });
+    } catch {
+      toast.error('Could not copy the link. Please copy it manually.');
+    }
+  }
+
+  async function shareLink() {
+    if (!info || typeof navigator.share !== 'function') return copyLink();
+    try {
+      await navigator.share({ title: 'FrigoChef', text: `Join me on FrigoChef and get ${REFERRAL_REWARD_DAYS} days of Pro for free!`, url: link });
+      trackEvent(EVENTS.REFERRAL_SHARED, { method: 'native_share' });
+    } catch {
+      // Condivisione annullata dall'utente: nessuna azione.
+    }
+  }
+
+  async function claim(e: FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setIsClaiming(true);
+    try {
+      await apiFetch('/api/referrals/claim', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
+      toast.success(`Code redeemed! You unlocked ${REFERRAL_REWARD_DAYS} days of Pro.`);
+      setCode('');
+      await load();
+      onClaimed?.();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setIsClaiming(false);
+    }
+  }
 
   if (isLoading) return null;
-  if (!stats) return null;
+  if (!info) {
+    return loadError ? (
+      <Card className="p-5 text-sm text-white/60">
+        {loadError} <button type="button" onClick={() => void load()} className="ml-1 text-emerald-400 hover:underline">Retry</button>
+      </Card>
+    ) : null;
+  }
+
+  const proUntil = info.proExpiresAt && new Date(info.proExpiresAt).getTime() > Date.now() ? new Date(info.proExpiresAt) : null;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30 flex items-center gap-2">
-          <Trophy size={12} /> Viral Growth Hub
-        </h3>
-        <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-            {stats.inviteCount} Successful Invites
+    <motion.div id="referral" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="scroll-mt-24">
+      <Card className="relative space-y-6 overflow-hidden p-5 sm:p-6">
+        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" aria-hidden />
+
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h2 className="flex items-center gap-2 font-semibold text-white"><Gift className="h-4 w-4 text-emerald-400" aria-hidden /> Invite friends</h2>
+            <p className="max-w-md text-sm text-white/55">
+              Give {REFERRAL_REWARD_DAYS} days of Pro, get {REFERRAL_REWARD_DAYS} days of Pro. Every friend who redeems your code extends your Pro access.
+            </p>
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+            <Users className="h-3.5 w-3.5" aria-hidden /> {info.totalInvited} {info.totalInvited === 1 ? 'friend' : 'friends'} joined
           </span>
         </div>
-      </div>
 
-      <div className="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/5 rounded-[32px] p-8 space-y-8 relative overflow-hidden">
-        {/* Decorative Circles */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/5 blur-[60px] rounded-full" />
-        
-        <div className="relative z-10 space-y-4">
-          <h4 className="text-2xl font-bold tracking-tight">Give 1 Month Pro,<br />Get 1 Month Pro.</h4>
-          <p className="text-white/40 text-sm max-w-xs leading-relaxed">
-            Share FrigoChef with your fellow cooks. When they join, you both unlock the full AI Masterpiece suite.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <p className="text-[10px] font-bold tracking-widest uppercase text-white/20">Your Unique Link</p>
+        <div className="relative space-y-2">
+          <Label htmlFor="referral-link">Your invite link</Label>
           <div className="flex gap-2">
-            <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-5 flex items-center text-sm font-mono text-white/60 overflow-hidden">
-              <span className="truncate whitespace-nowrap">frigochef.ai/signup?ref={stats.referralCode}</span>
-            </div>
-            <button 
-              onClick={copyLink}
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                copied ? 'bg-emerald-500 text-black' : 'bg-white text-black hover:bg-emerald-500'
-              }`}
-            >
-              {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-            </button>
+            <Input id="referral-link" readOnly value={link} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+            <Button type="button" variant="secondary" onClick={copyLink} aria-label="Copy invite link">
+              {copied ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            </Button>
+            <Button type="button" onClick={shareLink} aria-label="Share invite link"><Share2 className="h-4 w-4" aria-hidden /></Button>
           </div>
+          <p className="text-xs text-white/40">Code: <span className="font-mono text-white/70">{info.referralCode}</span></p>
         </div>
 
-        {/* Milestone Tracker */}
-        <div className="pt-4 space-y-6">
-          <div className="flex justify-between items-end">
-            <p className="text-[10px] font-bold tracking-widest uppercase text-white/20">Next Milestone</p>
-            <p className="text-xs font-bold text-emerald-500">{stats.inviteCount} / 5 Invites</p>
+        {(info.totalInvited > 0 || proUntil) && (
+          <div className="relative grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+              <p className="text-xs uppercase tracking-wide text-white/40">Pro days earned</p>
+              <p className="mt-1 text-2xl font-bold text-white">{info.rewards.reduce((sum, r) => sum + r.days, 0)}</p>
+            </div>
+            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+              <p className="text-xs uppercase tracking-wide text-white/40">Bonus Pro active until</p>
+              <p className="mt-1 text-lg font-semibold text-white">{proUntil ? proUntil.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</p>
+            </div>
           </div>
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, (stats.inviteCount / 5) * 100)}%` }}
-              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
-            />
-          </div>
-          <div className="flex items-center gap-3 text-white/30 italic text-[10px] font-medium">
-            <Gift size={14} className="text-emerald-500/40" />
-            &quot;5 invites unlocks Lifetime AI Vision processing.&quot;
-          </div>
-        </div>
-      </div>
+        )}
+
+        {!info.hasClaimed && (
+          <form onSubmit={claim} className="relative flex flex-col gap-2 border-t border-white/5 pt-5 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <Label htmlFor="claim-code">Got an invite code?</Label>
+              <Input id="claim-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. AB12CD34" autoComplete="off" />
+            </div>
+            <Button type="submit" variant="secondary" isLoading={isClaiming} disabled={code.trim().length < 4}>Redeem</Button>
+          </form>
+        )}
+      </Card>
     </motion.div>
   );
 }

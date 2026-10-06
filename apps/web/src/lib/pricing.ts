@@ -20,3 +20,6 @@ export function isProActive(profile: { is_pro?: boolean | null; pro_expires_at?:
 export function startOfMonthIso(now: Date = new Date()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
+
+/** Giorni di Pro regalati a entrambi i lati quando un codice invito viene riscattato. */
+export const REFERRAL_REWARD_DAYS = 7;

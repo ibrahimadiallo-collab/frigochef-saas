@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChefHat, Globe, Heart, Lock, Share2, Trash2 } from 'lucide-react';
 import type { Recipe } from '@/types';
 import { apiFetch, errorMessage } from '@/lib/http';
+import { EVENTS, trackEvent } from '@/lib/analytics';
 import RecipeCard from '@/components/RecipeCard';
 import SocialShare from '@/components/SocialShare';
 import { Button, buttonClasses } from '@/components/ui/Button';
@@ -27,6 +28,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
     try {
       const data = await apiFetch<{ recipe: Recipe }>(`/api/recipes/${id}`);
       setRecipe(data.recipe);
+      trackEvent(EVENTS.RECIPE_OPENED, { recipeId: id });
     } catch (err) {
       setError(errorMessage(err));
     }

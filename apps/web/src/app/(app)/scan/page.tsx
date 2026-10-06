@@ -7,6 +7,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Camera, CheckCircle2, ImagePlus, Plus, RefreshCcw, ScanLine, Sparkles, Trash2, Refrigerator } from 'lucide-react';
 import { INGREDIENT_CATEGORIES, type DetectedIngredient, type IngredientCategory } from '@/types';
 import { apiFetch, errorMessage } from '@/lib/http';
+import { EVENTS, trackEvent } from '@/lib/analytics';
+import { FREE_LIMITS } from '@/lib/pricing';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonClasses } from '@/components/ui/Button';
@@ -38,6 +41,8 @@ function ConfidenceMeter({ value }: { value: number }) {
 }
 
 export default function ScanPage() {
+  const { isPro, isLoading: userLoading, usage, refresh } = useCurrentUser();
+  const scansLeft = Math.max(0, FREE_LIMITS.scansPerMonth - usage.scansThisMonth);
   const [phase, setPhase] = useState<Phase>('select');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -67,6 +72,7 @@ export default function ScanPage() {
     if (!file) return;
     setError(null);
     setPhase('analyzing');
+    trackEvent(EVENTS.SCAN_STARTED, { sizeKb: Math.round(file.size / 1024) });
     try {
       const form = new FormData();
       form.append('image', file);
@@ -77,6 +83,8 @@ export default function ScanPage() {
       setIngredients(data.ingredients.map((i) => ({ ...i, key: nextKey() })));
       setScanId(data.scanId);
       setPhase('review');
+      trackEvent(EVENTS.SCAN_COMPLETED, { detected: data.ingredients.length });
+      void refresh();
     } catch (err) {
       setError(errorMessage(err));
       setPhase('preview');
@@ -109,6 +117,7 @@ export default function ScanPage() {
       });
       setSavedCount(data.savedCount);
       setPhase('success');
+      trackEvent(EVENTS.INGREDIENTS_CONFIRMED, { saved: data.savedCount, edited: valid.length });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -131,6 +140,17 @@ export default function ScanPage() {
 
       <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} />
+
+      {!userLoading && !isPro && phase === 'select' && (
+        <div className={cn('mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm', scansLeft === 0 ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-white/10 bg-white/[0.03] text-white/70')}>
+          <span>
+            {scansLeft === 0
+              ? `You've used all ${FREE_LIMITS.scansPerMonth} free scans this month.`
+              : `${scansLeft} of ${FREE_LIMITS.scansPerMonth} free scans left this month.`}
+          </span>
+          <Link href="/profile#upgrade" className="font-semibold text-emerald-400 hover:text-emerald-300">Go unlimited with Pro →</Link>
+        </div>
+      )}
 
       {error && phase !== 'review' && <div className="mb-4"><ErrorState message={error} /></div>}
 

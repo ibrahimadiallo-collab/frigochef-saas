@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Logo } from '@/components/layout/Logo';
 import { PageTransition } from '@/components/layout/PageTransition';
+import { ReferralAutoClaim } from '@/components/referral/ReferralAutoClaim';
 
 /** Shell dell'app autenticata: sidebar su desktop, bottom nav su mobile. */
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -19,6 +20,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </main>
       <BottomNav />
+      <ReferralAutoClaim />
     </div>
   );
 }
