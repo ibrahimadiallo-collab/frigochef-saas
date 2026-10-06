@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/supabase/server';
+import { RATE_LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import { prepareImage, analyzeFridgeImage } from '@/lib/vision';
 import { jsonError, serverError, unauthorized } from '@/lib/api';
 import { getUsage, scanLimitReached } from '@/lib/usage';
@@ -20,6 +21,9 @@ export async function POST(req: Request) {
     if (scanLimitReached(await getUsage(auth.supabase, auth.user.id))) {
       return jsonError(`You've used your ${FREE_LIMITS.scansPerMonth} free scans this month. Upgrade to Pro for unlimited scans.`, 402);
     }
+
+    const rl = await rateLimit(`scan:${auth.user.id}`, RATE_LIMITS.scan.limit, RATE_LIMITS.scan.windowMs);
+    if (!rl.success) return tooManyRequests(rl);
 
     let form: FormData;
     try {

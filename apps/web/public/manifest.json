@@ -1,0 +1,20 @@
+{
+  "name": "FrigoChef",
+  "short_name": "FrigoChef",
+  "description": "Turn your fridge into dinner with AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#10b981",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable any" }
+  ],
+  "categories": ["food", "lifestyle", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    { "name": "Scan Fridge", "url": "/scan", "description": "Scan your fridge" },
+    { "name": "My Pantry", "url": "/pantry", "description": "View your pantry" }
+  ]
+}

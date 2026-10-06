@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/supabase/server';
+import { RATE_LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import { generateMealPlan } from '@/lib/ai';
 import { computeFreshness } from '@/lib/freshness';
 import { mealPlanRequestSchema, mealPlanSchema, firstZodMessage } from '@/lib/validation';
@@ -57,6 +58,9 @@ export async function POST(req: Request) {
     if (!usage.isPro && usage.mealPlanCount >= FREE_LIMITS.mealPlans) {
       return jsonError('Your free meal plan has been used. Upgrade to Pro for unlimited weekly plans.', 402);
     }
+
+    const rl = await rateLimit(`mealPlan:${auth.user.id}`, RATE_LIMITS.mealPlan.limit, RATE_LIMITS.mealPlan.windowMs);
+    if (!rl.success) return tooManyRequests(rl);
 
     const { data: pantryRows, error: pantryError } = await auth.supabase
       .from('pantry_items')

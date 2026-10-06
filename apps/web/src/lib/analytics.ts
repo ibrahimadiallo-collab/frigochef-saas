@@ -2,6 +2,19 @@
 
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
+/** Chiave localStorage della preferenza cookie (vedi CookieBanner). */
+export const COOKIE_CONSENT_KEY = 'fc_cookie_consent';
+export type CookieConsent = 'accepted' | 'declined';
+
+export function getCookieConsent(): CookieConsent | null {
+  try {
+    const value = window.localStorage.getItem(COOKIE_CONSENT_KEY);
+    return value === 'accepted' || value === 'declined' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Eventi di prodotto tracciati nella tabella `analytics_events`. */
 export const EVENTS = {
   LANDING_VIEW: 'landing_view',
@@ -28,6 +41,8 @@ export type AnalyticsEvent = (typeof EVENTS)[keyof typeof EVENTS];
  */
 export function trackEvent(event: AnalyticsEvent, properties: Record<string, unknown> = {}): void {
   if (typeof window === 'undefined' || !isSupabaseConfigured()) return;
+  // L'utente ha rifiutato i cookie analitici: nessun tracciamento.
+  if (getCookieConsent() === 'declined') return;
   void (async () => {
     try {
       const supabase = createClient();

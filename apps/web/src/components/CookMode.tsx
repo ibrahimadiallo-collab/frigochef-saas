@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Pause, Play, RotateCcw, Timer, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Mic, MicOff, Pause, Play, RotateCcw, Timer, Volume2, X } from 'lucide-react';
 import type { Recipe } from '@/types';
 import { useTimer, formatClock } from '@/hooks/useTimer';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { EVENTS, trackEvent } from '@/lib/analytics';
+import { speak, stopSpeaking, useSpeechSupport, useVoiceControl, type VoiceCommand } from '@/hooks/useVoiceControl';
 
 interface CookModeProps {
   recipe: Recipe;
@@ -33,6 +34,26 @@ export default function CookMode({ recipe, onExit, onDone }: CookModeProps) {
     trackEvent(EVENTS.COOK_MODE_STARTED, { recipeId: recipe.id, steps: steps.length });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe.id]);
+
+  const speech = useSpeechSupport();
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+
+  function handleVoiceCommand(cmd: VoiceCommand) {
+    if (cmd === 'next' && !isLast) go(1);
+    else if (cmd === 'previous' && index > 0) go(-1);
+    else if (cmd === 'repeat' && step) speak(step.instruction);
+    else if (cmd === 'timer' && step?.duration) timer.start();
+    else if (cmd === 'done' && isLast) finish();
+  }
+  const voice = useVoiceControl(handleVoiceCommand, voiceEnabled);
+
+  // In modalità voce legge automaticamente ogni nuovo step.
+  useEffect(() => {
+    if (voiceEnabled && step) speak(step.instruction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, voiceEnabled]);
+
+  useEffect(() => stopSpeaking, []);
 
   function finish() {
     trackEvent(EVENTS.COOK_MODE_COMPLETED, { recipeId: recipe.id, steps: steps.length });
@@ -74,10 +95,43 @@ export default function CookMode({ recipe, onExit, onDone }: CookModeProps) {
             <p className="text-xs uppercase tracking-wide text-emerald-400">Cook mode</p>
             <h1 className="truncate text-base font-semibold text-white sm:text-lg">{recipe.title}</h1>
           </div>
-          <button type="button" onClick={onExit} aria-label="Exit cook mode" className="rounded-full p-2 text-white/60 hover:bg-white/5 hover:text-white">
-            <X className="h-6 w-6" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {speech.synthesis && (
+              <button type="button" onClick={() => speak(step.instruction)} aria-label="Read step aloud" title="Read step" className="rounded-full p-2 text-white/60 hover:bg-white/5 hover:text-white">
+                <Volume2 className="h-5 w-5" aria-hidden />
+              </button>
+            )}
+            {speech.recognition && (
+              <button
+                type="button"
+                onClick={() => setVoiceEnabled((v) => !v)}
+                aria-pressed={voiceEnabled}
+                aria-label={voiceEnabled ? 'Turn voice control off' : 'Turn voice control on'}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                  voiceEnabled ? 'bg-emerald-500 text-black' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white',
+                )}
+              >
+                {voiceEnabled ? <Mic className="h-4 w-4" aria-hidden /> : <MicOff className="h-4 w-4" aria-hidden />} Voice
+              </button>
+            )}
+            <button type="button" onClick={onExit} aria-label="Exit cook mode" className="rounded-full p-2 text-white/60 hover:bg-white/5 hover:text-white">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
+        {voiceEnabled && (
+          <div className="mx-auto mt-3 flex max-w-3xl flex-wrap items-center gap-2 text-xs" aria-live="polite">
+            {voice.error ? (
+              <span className="text-red-300">{voice.error}</span>
+            ) : (
+              <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 font-semibold text-emerald-300">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" aria-hidden /> {voice.isListening ? 'Listening...' : 'Starting...'}
+              </span>
+            )}
+            <span className="text-white/45">Speak commands: Next, Back, Repeat, Timer, Done</span>
+          </div>
+        )}
         <div className="mx-auto mt-3 max-w-3xl">
           <div className="mb-1 flex justify-between text-xs text-white/40">
             <span>Step {index + 1} of {steps.length}</span>

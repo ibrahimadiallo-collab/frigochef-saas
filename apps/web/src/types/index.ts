@@ -191,7 +191,20 @@ export interface Profile {
   /** Pro temporaneo (premi referral). */
   pro_expires_at: string | null;
   referral_claimed_at: string | null;
+  stripe_subscription_id?: string | null;
+  is_admin?: boolean | null;
+  scan_count?: number | null;
   created_at: string;
+}
+
+export interface FamilyMember {
+  id: string;
+  ownerId: string;
+  memberId: string;
+  role: 'owner' | 'member';
+  email: string | null;
+  invitedAt: string;
+  acceptedAt: string | null;
 }
 
 export interface ReferralInfo {

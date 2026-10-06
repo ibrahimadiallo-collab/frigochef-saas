@@ -30,11 +30,15 @@ async function getPublicRecipe(id: string): Promise<Recipe | null> {
 export async function generateMetadata({ params }: RecipePageProps): Promise<Metadata> {
   const { id } = await params;
   const recipe = await getPublicRecipe(id);
-  if (!recipe) return { title: 'Recipe not found | FrigoChef' };
+  if (!recipe) return { title: 'Recipe not found', robots: { index: false } };
+  const description = recipe.description || `Cook ${recipe.title} with FrigoChef, the AI kitchen assistant.`;
+  const images = recipe.imageUrl ? [{ url: recipe.imageUrl, alt: recipe.title }] : undefined;
   return {
-    title: `${recipe.title} | FrigoChef`,
-    description: recipe.description,
-    openGraph: { title: recipe.title, description: recipe.description, type: 'article', siteName: 'FrigoChef' },
+    title: { absolute: `${recipe.title} Recipe | FrigoChef` },
+    description,
+    alternates: { canonical: `/recipe/${id}` },
+    openGraph: { title: `${recipe.title} — FrigoChef AI Recipe`, description, type: 'article', siteName: 'FrigoChef', images },
+    twitter: { card: 'summary_large_image', title: `${recipe.title} — FrigoChef AI Recipe`, description, images: images?.map((i) => i.url) },
   };
 }
 

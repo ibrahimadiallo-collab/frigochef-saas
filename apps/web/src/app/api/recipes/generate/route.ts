@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/supabase/server';
+import { RATE_LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import { generateRecipe } from '@/lib/ai';
 import { effectiveExpiration } from '@/lib/freshness';
 import { foodImageFor, RECIPE_COLUMNS, rowToRecipe } from '@/lib/recipes';
@@ -23,6 +24,9 @@ export async function POST(req: Request) {
     const auth = await getAuthContext(req);
     if (!auth) return unauthorized();
     const { supabase, user } = auth;
+
+    const rl = await rateLimit(`recipeGenerate:${user.id}`, RATE_LIMITS.recipeGenerate.limit, RATE_LIMITS.recipeGenerate.windowMs);
+    if (!rl.success) return tooManyRequests(rl);
 
     const parsed = recipeGenerateSchema.safeParse((await readJson(req)) ?? {});
     if (!parsed.success) return jsonError(firstZodMessage(parsed.error));

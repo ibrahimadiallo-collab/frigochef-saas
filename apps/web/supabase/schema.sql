@@ -24,6 +24,11 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
 -- Pro temporaneo sbloccato dai referral + data in cui l'utente ha riscattato un codice.
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMPTZ;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referral_claimed_at TIMESTAMPTZ;
+-- Stripe subscription lifecycle, admin console, contatore scansioni.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS scan_count INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS profiles_stripe_customer_idx ON public.profiles (stripe_customer_id);
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
@@ -46,6 +51,9 @@ BEGIN
     NEW.pro_expires_at := OLD.pro_expires_at;
     NEW.referral_claimed_at := OLD.referral_claimed_at;
     NEW.referred_by := OLD.referred_by;
+    NEW.stripe_subscription_id := OLD.stripe_subscription_id;
+    NEW.is_admin := OLD.is_admin;
+    NEW.scan_count := OLD.scan_count;
   END IF;
   RETURN NEW;
 END;
@@ -339,3 +347,75 @@ CREATE POLICY "Users can insert their own events" ON public.analytics_events
 DROP POLICY IF EXISTS "Anyone can insert anonymous events" ON public.analytics_events;
 CREATE POLICY "Anyone can insert anonymous events" ON public.analytics_events
   FOR INSERT WITH CHECK (user_id IS NULL);
+
+CREATE INDEX IF NOT EXISTS analytics_events_created_idx ON public.analytics_events (created_at DESC);
+
+-- ---------------------------------------------------------------------
+-- 11. FAMILY PANTRY (Pro): l'owner condivide la propria dispensa con altri utenti
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.family_members (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  member_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  role TEXT DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+  invited_at TIMESTAMPTZ DEFAULT NOW(),
+  accepted_at TIMESTAMPTZ,
+  UNIQUE (owner_id, member_id),
+  CHECK (owner_id <> member_id)
+);
+CREATE INDEX IF NOT EXISTS family_members_member_idx ON public.family_members (member_id);
+ALTER TABLE public.family_members ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Family members can read" ON public.family_members;
+CREATE POLICY "Family members can read" ON public.family_members
+  FOR SELECT USING (auth.uid() = owner_id OR auth.uid() = member_id);
+DROP POLICY IF EXISTS "Owners can manage" ON public.family_members;
+CREATE POLICY "Owners can manage" ON public.family_members
+  FOR ALL USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+-- Il membro può lasciare la famiglia (eliminare la propria riga).
+DROP POLICY IF EXISTS "Members can leave" ON public.family_members;
+CREATE POLICY "Members can leave" ON public.family_members
+  FOR DELETE USING (auth.uid() = member_id);
+
+-- Accetta un invito pendente (solo il membro invitato; non può cambiare ruolo o owner).
+CREATE OR REPLACE FUNCTION public.accept_family_invite(invite_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.family_members
+     SET accepted_at = NOW()
+   WHERE id = invite_id AND member_id = auth.uid() AND accepted_at IS NULL;
+  RETURN FOUND;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.accept_family_invite(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.accept_family_invite(UUID) TO authenticated;
+
+-- TRUE se l'utente corrente è membro accettato della famiglia di `owner`.
+CREATE OR REPLACE FUNCTION public.is_family_member_of(owner UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.family_members
+    WHERE owner_id = owner AND member_id = auth.uid() AND accepted_at IS NOT NULL
+  );
+$$;
+REVOKE ALL ON FUNCTION public.is_family_member_of(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_family_member_of(UUID) TO authenticated;
+
+-- I membri accettati possono leggere e aggiungere/aggiornare gli ingredienti della dispensa dell'owner.
+DROP POLICY IF EXISTS "Family can view shared pantry" ON public.pantry_items;
+CREATE POLICY "Family can view shared pantry" ON public.pantry_items
+  FOR SELECT USING (public.is_family_member_of(user_id));
+DROP POLICY IF EXISTS "Family can add to shared pantry" ON public.pantry_items;
+CREATE POLICY "Family can add to shared pantry" ON public.pantry_items
+  FOR INSERT WITH CHECK (public.is_family_member_of(user_id));
+DROP POLICY IF EXISTS "Family can update shared pantry" ON public.pantry_items;
+CREATE POLICY "Family can update shared pantry" ON public.pantry_items
+  FOR UPDATE USING (public.is_family_member_of(user_id)) WITH CHECK (public.is_family_member_of(user_id));

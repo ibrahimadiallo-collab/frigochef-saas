@@ -1,10 +1,39 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Camera, CalendarDays, ChefHat, Check, Leaf, Package, Radar, Sparkles } from 'lucide-react';
 import { MarketingNav } from '@/components/layout/MarketingNav';
 import { Reveal } from '@/components/landing/Reveal';
 import { buttonClasses } from '@/components/ui/Button';
 import { TrackView } from '@/components/landing/TrackView';
-import { FREE_LIMITS, PRO_PRICE_LABEL } from '@/lib/pricing';
+import { FREE_LIMITS, PRO_PRICE_EUR, PRO_PRICE_LABEL } from '@/lib/pricing';
+
+export const metadata: Metadata = {
+  title: { absolute: 'FrigoChef — Turn your fridge into dinner with AI' },
+  description:
+    'Scan your fridge with AI, track ingredient freshness and get recipes and weekly meal plans from what you already have. Free to start.',
+  alternates: { canonical: '/' },
+};
+
+// Nessun aggregateRating: valutazioni non verificabili nei dati strutturati violano le linee guida Google.
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'FrigoChef',
+  applicationCategory: 'FoodAndDrink',
+  operatingSystem: 'Web, iOS, Android',
+  description: 'AI-powered kitchen assistant that scans your fridge and generates recipes.',
+  url: process.env.NEXT_PUBLIC_APP_URL || 'https://frigochef.app',
+  offers: [
+    { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'EUR' },
+    {
+      '@type': 'Offer',
+      name: 'Pro',
+      price: PRO_PRICE_EUR.toFixed(2),
+      priceCurrency: 'EUR',
+      priceSpecification: { '@type': 'UnitPriceSpecification', price: PRO_PRICE_EUR.toFixed(2), priceCurrency: 'EUR', billingDuration: 'P1M' },
+    },
+  ],
+};
 
 const FEATURES = [
   { id: 'vision', icon: Camera, title: 'Fridge Vision', text: 'Snap a photo of your fridge. AI detects every ingredient, its quantity and freshness in seconds.' },
@@ -54,6 +83,7 @@ function SectionTitle({ eyebrow, title, text }: { eyebrow: string; title: string
 export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#0a0a0a] text-white">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, '\\u003c') }} />
       <TrackView />
       <MarketingNav />
 
