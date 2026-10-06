@@ -1,214 +1,114 @@
 'use client';
 
-import { useState } from 'react';
-import { Clock, Users, BarChart, Copy, Share2, Sparkles, Play, Check } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
-import CookMode from './CookMode';
-import SocialShare from './SocialShare';
+import Image from 'next/image';
+import { Check, Clock, Flame, Gauge, ShoppingBasket, Users } from 'lucide-react';
+import type { Recipe } from '@/types';
+import { formatMinutes, totalTime } from '@/lib/recipes';
+import { Card } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 
-interface Recipe {
-  id?: string;
-  nome: string;
-  tempo: string;
-  porzioni: string;
-  difficolta: string;
-  nutrizione?: {
-    calorie: number;
-    proteine: string;
-    carboidrati: string;
-    grassi: string;
-  };
-  sostenibilita?: number;
-  ingredienti: string[];
-  passaggi: string[];
-}
-
-interface RecipeCardProps {
-  recipe: Recipe;
-}
-
-export default function RecipeCard({ recipe }: RecipeCardProps) {
-  const [isCookModeOpen, setIsCookModeOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
-
-  const copyToClipboard = () => {
-    const text = `${recipe.nome}\n\nIngredienti:\n${recipe.ingredienti.join('\n')}\n\nProcedimento:\n${recipe.passaggi.join('\n')}`;
-    navigator.clipboard.writeText(text);
-  };
+/** Vista dettaglio di una ricetta (usata in /recipes/[id] e nella pagina pubblica /recipe/[id]). */
+export default function RecipeCard({ recipe }: { recipe: Recipe }) {
+  const stats = [
+    { icon: Clock, label: 'Total', value: formatMinutes(totalTime(recipe)) },
+    { icon: Gauge, label: 'Difficulty', value: recipe.difficulty },
+    { icon: Users, label: 'Servings', value: String(recipe.servings) },
+    { icon: Flame, label: 'Calories', value: recipe.nutrition.calories ? `${recipe.nutrition.calories} kcal` : '—' },
+  ];
 
   return (
-    <>
-      <div className="bg-white/[0.02] border border-white/10 rounded-[40px] overflow-hidden shadow-2xl backdrop-blur-sm animate-in fade-in slide-in-from-bottom-8 duration-700">
-        
-        {/* Header Section */}
-        <div className="p-8 md:p-12 bg-gradient-to-br from-emerald-500/10 to-transparent border-b border-white/5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-            <Sparkles size={120} className="text-emerald-500" />
-          </div>
-          
-          <div className="relative z-10 space-y-6">
-            <div className="flex justify-between items-start">
-              <div className="flex items-center gap-2 text-emerald-500">
-                <Sparkles size={16} />
-                <span className="text-[10px] font-bold tracking-[0.3em] uppercase">AI Masterpiece</span>
-              </div>
-              
-              {recipe.sostenibilita && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-full flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-                    Sustainability {recipe.sostenibilita}/100
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            <h2 className="text-4xl md:text-5xl font-bold text-white leading-tight tracking-tighter max-w-2xl">
-              {recipe.nome}
-            </h2>
-            
-            <div className="flex flex-wrap gap-8 pt-4">
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-white/20 flex items-center gap-2">
-                  <Clock size={12} /> Time
-                </p>
-                <p className="text-sm font-bold text-white/80">{recipe.tempo}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-white/20 flex items-center gap-2">
-                  <Users size={12} /> Portions
-                </p>
-                <p className="text-sm font-bold text-white/80">{recipe.porzioni}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-white/20 flex items-center gap-2">
-                  <BarChart size={12} /> Difficulty
-                </p>
-                <p className="text-sm font-bold text-white/80">{recipe.difficolta}</p>
-              </div>
-            </div>
+    <Card className="overflow-hidden">
+      {recipe.imageUrl && (
+        <div className="relative aspect-[16/9] w-full bg-white/5">
+          <Image src={recipe.imageUrl} alt={recipe.title} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" priority />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/20 to-transparent" />
+        </div>
+      )}
 
-            {/* Nutrition Panel - The Billion Dollar Value Add */}
-            {recipe.nutrizione && (
-              <div className="grid grid-cols-4 gap-4 p-6 bg-white/5 rounded-3xl border border-white/5">
-                <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold text-white">{recipe.nutrizione.calorie}</p>
-                  <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Kcal</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold text-emerald-500">{recipe.nutrizione.proteine}</p>
-                  <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Protein</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold text-blue-400">{recipe.nutrizione.carboidrati}</p>
-                  <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Carbs</p>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold text-amber-400">{recipe.nutrizione.grassi}</p>
-                  <p className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Fats</p>
-                </div>
-              </div>
-            )}
-          </div>
+      <div className="space-y-8 p-5 sm:p-8">
+        <div className="space-y-3">
+          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">{recipe.title}</h2>
+          {recipe.description && <p className="text-white/60">{recipe.description}</p>}
+          {recipe.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {recipe.tags.slice(0, 6).map((tag) => (
+                <span key={tag} className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs text-white/60">#{tag}</span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Content Grid */}
-        <div className="grid md:grid-cols-[1fr_1.5fr] divide-y md:divide-y-0 md:divide-x divide-white/5">
-          
-          {/* Ingredients Column */}
-          <div className="p-8 md:p-12 space-y-8 bg-white/[0.01]">
-            <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30 border-b border-white/5 pb-4">
-              Ingredients
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {stats.map(({ icon: Icon, label, value }) => (
+            <div key={label} className="rounded-xl border border-white/5 bg-black/30 p-3">
+              <Icon className="mb-2 h-4 w-4 text-emerald-400" aria-hidden />
+              <p className="text-[11px] uppercase tracking-wide text-white/40">{label}</p>
+              <p className="text-sm font-semibold capitalize text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-[1fr_1.4fr]">
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white/50">
+              <ShoppingBasket className="h-4 w-4" aria-hidden /> Ingredients
             </h3>
-            <ul className="space-y-5">
-              {recipe.ingredienti.map((ing, i) => (
-                <li key={i} className="text-sm font-medium text-white/60 flex items-start gap-4 group">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/40 mt-1.5 group-hover:bg-emerald-500 transition-colors" />
-                  {ing}
+            <ul className="space-y-2">
+              {recipe.ingredients.map((ing, i) => (
+                <li key={`${ing.name}-${i}`} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 capitalize text-white/85">
+                    <span
+                      className={cn(
+                        'flex h-4 w-4 items-center justify-center rounded-full',
+                        ing.available ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/30',
+                      )}
+                      title={ing.available ? 'In your pantry' : 'Missing'}
+                    >
+                      {ing.available && <Check className="h-3 w-3" aria-hidden />}
+                    </span>
+                    {ing.name}
+                  </span>
+                  <span className="text-xs text-white/40">
+                    {ing.quantity ?? ''} {ing.unit ?? ''}
+                  </span>
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
 
-          {/* Steps Column (Preview) */}
-          <div className="p-8 md:p-12 space-y-8">
-            <div className="flex justify-between items-center border-b border-white/5 pb-4">
-              <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30">
-                Procedure
-              </h3>
-              <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">
-                {recipe.passaggi.length} steps
-              </span>
-            </div>
-            
-            <ol className="space-y-8">
-              {recipe.passaggi.slice(0, 3).map((step, i) => (
-                <li key={i} className="flex gap-6 group">
-                  <span className="flex-shrink-0 w-8 h-8 rounded-xl bg-white/5 border border-white/10 text-white/40 text-[10px] font-mono font-bold flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:text-emerald-500 group-hover:border-emerald-500/20 transition-all">
-                    {(i + 1).toString().padStart(2, '0')}
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">Steps</h3>
+            <ol className="space-y-4">
+              {recipe.steps.map((s) => (
+                <li key={s.step} className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-xs font-bold text-emerald-300">
+                    {s.step}
                   </span>
-                  <p className="text-sm leading-relaxed text-white/40 group-hover:text-white/80 transition-colors">
-                    {step}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm leading-relaxed text-white/80">{s.instruction}</p>
+                    {s.duration ? <p className="text-xs text-white/40">⏱ {s.duration} min</p> : null}
+                  </div>
                 </li>
               ))}
-              {recipe.passaggi.length > 3 && (
-                <li className="pl-14 text-xs font-bold uppercase tracking-widest text-white/10">
-                  + {recipe.passaggi.length - 3} more steps
-                </li>
-              )}
             </ol>
-
-            {/* CTA Overlay for preview */}
-            <div className="pt-8">
-              <button 
-                onClick={() => setIsCookModeOpen(true)}
-                className="w-full h-20 bg-emerald-500 text-black rounded-3xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-400 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_20px_40px_rgba(16,185,129,0.2)]"
-              >
-                <Play size={20} fill="currentColor" />
-                START COOKING MODE
-              </button>
-            </div>
-          </div>
+          </section>
         </div>
 
-        {/* Footer Actions */}
-        <div className="bg-black/40 p-6 flex justify-between items-center border-t border-white/5 backdrop-blur-md">
-          <div className="flex gap-3">
-            <button 
-              onClick={copyToClipboard}
-              className="p-3 rounded-xl border border-white/5 bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
-            >
-              <Copy size={14} /> Copy
-            </button>
-            <button 
-              onClick={() => setIsShareOpen(true)}
-              className="p-3 rounded-xl border border-white/5 bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
-            >
-              <Share2 size={14} /> Share
-            </button>
+        {(recipe.nutrition.protein > 0 || recipe.nutrition.carbs > 0 || recipe.nutrition.fat > 0) && (
+          <div className="grid grid-cols-3 gap-3 rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4 text-center">
+            {[
+              ['Protein', recipe.nutrition.protein],
+              ['Carbs', recipe.nutrition.carbs],
+              ['Fat', recipe.nutrition.fat],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-lg font-bold text-white">{value}g</p>
+                <p className="text-[11px] uppercase tracking-wide text-white/40">{label}</p>
+              </div>
+            ))}
           </div>
-          <button className="text-[10px] font-bold tracking-[0.2em] uppercase text-emerald-500 hover:text-emerald-400 transition-colors flex items-center gap-2">
-            <Check size={14} /> Save to Cookbook
-          </button>
-        </div>
-      </div>
-
-      {/* Fullscreen Cook Mode Portal-like implementation */}
-      <AnimatePresence>
-        {isCookModeOpen && (
-          <CookMode 
-            recipe={recipe} 
-            onClose={() => setIsCookModeOpen(false)} 
-          />
         )}
-      </AnimatePresence>
-
-      <SocialShare 
-        recipe={recipe} 
-        isOpen={isShareOpen} 
-        onClose={() => setIsShareOpen(false)} 
-      />
-    </>
+      </div>
+    </Card>
   );
 }

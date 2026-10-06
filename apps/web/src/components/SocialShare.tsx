@@ -5,20 +5,8 @@ import { toPng } from 'html-to-image';
 import { Download, X, Sparkles, Share2, Link as LinkIcon, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-interface Recipe {
-  id?: string;
-  nome: string;
-  tempo: string;
-  porzioni: string;
-  difficolta: string;
-  nutrizione?: {
-    calorie: number;
-    proteine: string;
-    carboidrati: string;
-    grassi: string;
-  };
-  ingredienti: string[];
-}
+import type { Recipe } from '@/types';
+import { formatMinutes, totalTime } from '@/lib/recipes';
 
 interface SocialShareProps {
   recipe: Recipe;
@@ -68,7 +56,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
       });
       
       const link = document.createElement('a');
-      link.download = `frigochef-${recipe.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.download = `frigochef-${recipe.title.toLowerCase().replace(/\s+/g, '-')}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -79,7 +67,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
   };
 
   const copyRecipeLink = () => {
-    if (!recipe.id) return;
+    if (!recipe.id || !recipe.isPublic) return;
     const url = `${window.location.origin}/recipe/${recipe.id}`;
     navigator.clipboard.writeText(url);
     setIsCopied(true);
@@ -111,10 +99,12 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                 className="relative w-full aspect-[9/16] max-h-[60vh] md:max-h-[70vh] shadow-2xl rounded-2xl overflow-hidden border border-white/10"
               >
                 {/* The actual element to be captured (Hidden from viewport scaling, scaled for preview) */}
-                <div 
+                <motion.div
                   ref={storyRef}
                   className="absolute inset-0 w-[1080px] h-[1920px] bg-neutral-950 text-white p-16 flex flex-col origin-top-left"
-                  style={{ transform: `scale(${previewScale})` }}
+                  initial={false}
+                  animate={{ scale: previewScale }}
+                  transition={{ duration: 0 }}
                 >
                   {/* Background Accents */}
                   <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/10 blur-[120px] rounded-full -mr-96 -mt-96" />
@@ -137,32 +127,32 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                     {/* Content */}
                     <div className="flex-1 flex flex-col justify-center space-y-12">
                       <h1 className="text-8xl font-black leading-[0.9] tracking-tighter">
-                        {recipe.nome}
+                        {recipe.title}
                       </h1>
 
                       <div className="flex gap-8">
                         <div className="bg-white/5 border border-white/10 px-8 py-4 rounded-3xl">
                           <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-1">Time</p>
-                          <p className="text-2xl font-bold">{recipe.tempo}</p>
+                          <p className="text-2xl font-bold">{formatMinutes(totalTime(recipe))}</p>
                         </div>
                         <div className="bg-white/5 border border-white/10 px-8 py-4 rounded-3xl">
                           <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-1">Difficulty</p>
-                          <p className="text-2xl font-bold">{recipe.difficolta}</p>
+                          <p className="text-2xl font-bold"><span className="capitalize">{recipe.difficulty}</span></p>
                         </div>
                       </div>
 
                       <div className="space-y-6">
                         <p className="text-xs font-bold text-emerald-500 uppercase tracking-[0.4em]">Ingredients</p>
                         <div className="grid grid-cols-1 gap-4">
-                          {recipe.ingredienti.slice(0, 6).map((ing, i) => (
+                          {recipe.ingredients.slice(0, 6).map((ing, i) => (
                             <div key={i} className="flex items-center gap-4 text-3xl font-medium text-white/80">
                               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                              {ing}
+                              <span className="capitalize">{ing.name}</span>
                             </div>
                           ))}
-                          {recipe.ingredienti.length > 6 && (
+                          {recipe.ingredients.length > 6 && (
                             <p className="text-2xl font-bold text-white/20 pl-6">
-                              + {recipe.ingredienti.length - 6} more
+                              + {recipe.ingredients.length - 6} more
                             </p>
                           )}
                         </div>
@@ -170,22 +160,22 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                     </div>
 
                     {/* Footer / Nutrition */}
-                    {recipe.nutrizione && (
+                    {recipe.nutrition.calories > 0 && (
                       <div className="grid grid-cols-4 gap-6 p-10 bg-emerald-500/10 border border-emerald-500/20 rounded-[40px] mt-auto">
                         <div className="text-center">
-                          <p className="text-4xl font-black text-white">{recipe.nutrizione.calorie}</p>
+                          <p className="text-4xl font-black text-white">{recipe.nutrition.calories}</p>
                           <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Kcal</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-4xl font-black text-emerald-500">{recipe.nutrizione.proteine}</p>
+                          <p className="text-4xl font-black text-emerald-500">{recipe.nutrition.protein}g</p>
                           <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Protein</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-4xl font-black text-blue-400">{recipe.nutrizione.carboidrati}</p>
+                          <p className="text-4xl font-black text-blue-400">{recipe.nutrition.carbs}g</p>
                           <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Carbs</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-4xl font-black text-amber-400">{recipe.nutrizione.grassi}</p>
+                          <p className="text-4xl font-black text-amber-400">{recipe.nutrition.fat}g</p>
                           <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Fats</p>
                         </div>
                       </div>
@@ -197,7 +187,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                       </p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
               <p className="mt-6 text-sm text-white/40 font-medium">Instagram Story Preview (9:16)</p>
             </div>
@@ -231,7 +221,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
 
                   <button 
                     onClick={copyRecipeLink}
-                    disabled={!recipe.id}
+                    disabled={!recipe.isPublic}
                     className="w-full p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between group hover:bg-emerald-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center gap-3">
@@ -240,7 +230,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
                       </div>
                       <div className="text-left">
                         <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Public Link</p>
-                        <p className="text-xs text-white/40">Copy for SEO sharing</p>
+                        <p className="text-xs text-white/40">{recipe.isPublic ? 'Copy shareable link' : 'Make the recipe public first'}</p>
                       </div>
                     </div>
                     {isCopied && <span className="text-[10px] font-bold text-emerald-500 uppercase">COPIED</span>}

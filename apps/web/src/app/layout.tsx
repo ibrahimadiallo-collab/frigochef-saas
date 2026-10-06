@@ -1,24 +1,27 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
-// Rimosso next/font/google per evitare errori di build dovuti alla connessione di rete
-// che impedisce il download dei font durante la compilazione.
-// Utilizzeremo font di sistema premium (Inter, Satoshi fallback).
+// Font di sistema (niente next/font/google per evitare download di rete in build).
 
 export const metadata: Metadata = {
-  title: "FrigoChef — The AI Kitchen Assistant",
-  description: "Turn your fridge into dinner with high-end AI recipe generation.",
+  title: 'FrigoChef — Turn your fridge into dinner',
+  description: 'Scan your fridge, track freshness and get AI recipes from what you already have.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: '#0a0a0a',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="it">
-      <body className="antialiased bg-[#020202] text-[#f5f5f5] font-sans">
-        {children}
+    <html lang="en" className="scroll-smooth">
+      <body className="min-h-screen bg-[#0a0a0a] font-sans text-neutral-100 antialiased selection:bg-emerald-500/30">
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
