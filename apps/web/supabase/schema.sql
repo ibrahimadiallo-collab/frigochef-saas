@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name TEXT;
+-- Pro temporaneo sbloccato dai referral + data in cui l'utente ha riscattato un codice.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS referral_claimed_at TIMESTAMPTZ;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
@@ -35,9 +38,14 @@ CREATE POLICY "Users can update their own profile" ON public.profiles
 CREATE OR REPLACE FUNCTION public.protect_profile_billing()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF COALESCE(auth.jwt()->>'role', '') = 'authenticated' THEN
+  -- current_user = 'authenticated' solo per richieste dirette del client:
+  -- le funzioni SECURITY DEFINER (es. claim_referral) possono aggiornare i campi protetti.
+  IF COALESCE(auth.jwt()->>'role', '') = 'authenticated' AND current_user = 'authenticated' THEN
     NEW.is_pro := OLD.is_pro;
     NEW.stripe_customer_id := OLD.stripe_customer_id;
+    NEW.pro_expires_at := OLD.pro_expires_at;
+    NEW.referral_claimed_at := OLD.referral_claimed_at;
+    NEW.referred_by := OLD.referred_by;
   END IF;
   RETURN NEW;
 END;
@@ -164,6 +172,10 @@ CREATE TABLE IF NOT EXISTS public.meal_plans (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS meal_plans_user_idx ON public.meal_plans (user_id, week_start DESC);
+-- Un solo piano per settimana (necessario per l'upsert): rimuove eventuali duplicati legacy.
+DELETE FROM public.meal_plans a USING public.meal_plans b
+  WHERE a.user_id = b.user_id AND a.week_start = b.week_start AND a.created_at < b.created_at;
+CREATE UNIQUE INDEX IF NOT EXISTS meal_plans_user_week_uidx ON public.meal_plans (user_id, week_start);
 
 -- ---------------------------------------------------------------------
 -- 5. SHOPPING LIST ITEMS
@@ -248,3 +260,81 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION public.referral_count(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.referral_count(TEXT) TO authenticated;
+
+-- ---------------------------------------------------------------------
+-- 9. REFERRAL CLAIM: l'utente riscatta un codice, il proprietario riceve 7 giorni di Pro
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.claim_referral(code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  me public.profiles%ROWTYPE;
+  owner_id UUID;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
+  END IF;
+  SELECT * INTO me FROM public.profiles WHERE id = auth.uid();
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'no_profile');
+  END IF;
+  IF me.referral_claimed_at IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'already_claimed');
+  END IF;
+  SELECT id INTO owner_id FROM public.profiles WHERE upper(referral_code) = upper(trim(code));
+  IF owner_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'invalid_code');
+  END IF;
+  IF owner_id = me.id THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'own_code');
+  END IF;
+
+  UPDATE public.profiles
+     SET referred_by = (SELECT referral_code FROM public.profiles WHERE id = owner_id),
+         referral_claimed_at = NOW()
+   WHERE id = me.id;
+  UPDATE public.profiles
+     SET pro_expires_at = GREATEST(COALESCE(pro_expires_at, NOW()), NOW()) + INTERVAL '7 days'
+   WHERE id = owner_id;
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.claim_referral(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.claim_referral(TEXT) TO authenticated;
+
+-- Il conteggio considera solo i referral effettivamente riscattati.
+CREATE OR REPLACE FUNCTION public.referral_count(code TEXT)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COUNT(*)::INTEGER FROM public.profiles
+  WHERE referred_by = code
+    AND referral_claimed_at IS NOT NULL
+    AND code = (SELECT referral_code FROM public.profiles WHERE id = auth.uid());
+$$;
+
+-- ---------------------------------------------------------------------
+-- 10. ANALYTICS EVENTS (solo insert dal client; lettura via service role)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.analytics_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  event TEXT NOT NULL,
+  properties JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS analytics_events_event_idx ON public.analytics_events (event, created_at DESC);
+ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can insert their own events" ON public.analytics_events;
+CREATE POLICY "Users can insert their own events" ON public.analytics_events
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- Eventi anonimi (es. landing_view) senza user_id.
+DROP POLICY IF EXISTS "Anyone can insert anonymous events" ON public.analytics_events;
+CREATE POLICY "Anyone can insert anonymous events" ON public.analytics_events
+  FOR INSERT WITH CHECK (user_id IS NULL);

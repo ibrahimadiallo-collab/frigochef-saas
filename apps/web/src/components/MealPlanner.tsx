@@ -1,72 +1,138 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Clock, Coffee, Flame, Moon, Sun } from 'lucide-react';
-import type { MealPlanDay } from '@/types';
-import { Card } from '@/components/ui/Card';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronDown, Clock, Coffee, Moon, Sun, type LucideIcon } from 'lucide-react';
+import { MEAL_SLOTS, WEEK_DAYS, type MealPlanContent, type MealSlotKey, type PlannedMeal, type WeekDay } from '@/types';
+import { DAY_LABELS, dayDate, mondayOf, toIsoDate } from '@/lib/week';
 import { cn } from '@/lib/cn';
 
-const MEALS = [
-  { key: 'breakfast', label: 'Breakfast', icon: Coffee, color: 'text-amber-300' },
-  { key: 'lunch', label: 'Lunch', icon: Sun, color: 'text-emerald-300' },
-  { key: 'dinner', label: 'Dinner', icon: Moon, color: 'text-sky-300' },
-] as const;
+const SLOT_META: Record<MealSlotKey, { label: string; icon: LucideIcon }> = {
+  breakfast: { label: 'Breakfast', icon: Coffee },
+  lunch: { label: 'Lunch', icon: Sun },
+  dinner: { label: 'Dinner', icon: Moon },
+};
 
-/** Piano settimanale: selettore del giorno + 3 pasti. */
-export default function MealPlanner({ days }: { days: MealPlanDay[] }) {
-  const [active, setActive] = useState(0);
-  const day = days[active];
-  if (!day) return null;
-  const dayCalories = day.breakfast.calories + day.lunch.calories + day.dinner.calories;
+export interface SelectedMeal {
+  day: WeekDay;
+  slot: MealSlotKey;
+  meal: PlannedMeal;
+}
+
+interface MealPlannerProps {
+  plan: MealPlanContent;
+  onSelectMeal: (selection: SelectedMeal) => void;
+}
+
+function MealButton({ slot, meal, onClick }: { slot: MealSlotKey; meal: PlannedMeal; onClick: () => void }) {
+  const { label, icon: Icon } = SLOT_META[slot];
+  const shown = meal.ingredients.slice(0, 3);
+  const extra = meal.ingredients.length - shown.length;
+  return (
+    <motion.button
+      type="button"
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className="w-full rounded-xl border border-white/5 bg-white/[0.03] p-3 text-left transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/5"
+    >
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-400/80">
+        <Icon className="h-3 w-3" aria-hidden /> {label}
+      </p>
+      <p className="mt-1 line-clamp-2 text-sm font-medium text-white">{meal.title}</p>
+      <p className="mt-1 flex items-center gap-1 text-xs text-white/45">
+        <Clock className="h-3 w-3" aria-hidden /> {meal.prepTime} min
+      </p>
+      {shown.length > 0 && (
+        <p className="mt-1.5 line-clamp-2 text-xs text-white/50">
+          {shown.join(' · ')}
+          {extra > 0 && ` +${extra}`}
+        </p>
+      )}
+    </motion.button>
+  );
+}
+
+/** Calendario settimanale: 7 colonne su desktop, accordion per giorno su mobile. */
+export default function MealPlanner({ plan, onSelectMeal }: MealPlannerProps) {
+  const today = toIsoDate(new Date());
+  const isCurrentWeek = mondayOf() === plan.weekStart;
+  const todayKey = WEEK_DAYS.find((d) => toIsoDate(dayDate(plan.weekStart, d)) === today);
+  const [openDay, setOpenDay] = useState<WeekDay | null>(isCurrentWeek && todayKey ? todayKey : 'monday');
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex gap-1 overflow-x-auto border-b border-white/5 p-2">
-        {days.map((d, i) => (
-          <button
-            key={d.day}
-            type="button"
-            onClick={() => setActive(i)}
-            className={cn(
-              'relative min-w-[64px] flex-1 rounded-xl px-3 py-2 text-sm font-medium',
-              active === i ? 'text-black' : 'text-white/50 hover:bg-white/5 hover:text-white',
-            )}
-          >
-            {active === i && <motion.span layoutId="meal-day" className="absolute inset-0 rounded-xl bg-emerald-500" />}
-            <span className="relative">{d.day.slice(0, 3)}</span>
-          </button>
-        ))}
+    <>
+      {/* Desktop */}
+      <div className="hidden gap-3 lg:grid lg:grid-cols-7">
+        {WEEK_DAYS.map((day, i) => {
+          const date = dayDate(plan.weekStart, day);
+          const isToday = toIsoDate(date) === today;
+          return (
+            <motion.section
+              key={day}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className={cn(
+                'flex flex-col gap-2 rounded-2xl border bg-[#111827]/70 p-2.5',
+                isToday ? 'border-emerald-500/60' : 'border-emerald-500/15',
+              )}
+            >
+              <header className="px-1 pb-1">
+                <p className={cn('text-sm font-semibold', isToday ? 'text-emerald-400' : 'text-white')}>{DAY_LABELS[day].slice(0, 3)}</p>
+                <p className="text-xs text-white/40">{date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+              </header>
+              {MEAL_SLOTS.map((slot) => (
+                <MealButton key={slot} slot={slot} meal={plan.days[day][slot]} onClick={() => onSelectMeal({ day, slot, meal: plan.days[day][slot] })} />
+              ))}
+            </motion.section>
+          );
+        })}
       </div>
 
-      <div className="p-4 sm:p-6">
-        <div className="mb-4 flex items-baseline justify-between">
-          <h3 className="text-lg font-semibold text-white">{day.day}</h3>
-          <span className="text-xs text-white/40">{dayCalories} kcal total</span>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {MEALS.map(({ key, label, icon: Icon, color }) => {
-            const meal = day[key];
-            return (
-              <motion.div
-                key={`${day.day}-${key}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl border border-white/5 bg-black/30 p-4"
+      {/* Mobile / tablet */}
+      <div className="space-y-2 lg:hidden">
+        {WEEK_DAYS.map((day) => {
+          const date = dayDate(plan.weekStart, day);
+          const isOpen = openDay === day;
+          const isToday = toIsoDate(date) === today;
+          return (
+            <section key={day} className={cn('overflow-hidden rounded-2xl border bg-[#111827]/70', isToday ? 'border-emerald-500/60' : 'border-emerald-500/15')}>
+              <button
+                type="button"
+                onClick={() => setOpenDay(isOpen ? null : day)}
+                aria-expanded={isOpen}
+                className="flex w-full items-center justify-between px-4 py-3 text-left"
               >
-                <div className={cn('mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide', color)}>
-                  <Icon className="h-4 w-4" aria-hidden /> {label}
-                </div>
-                <p className="font-medium text-white">{meal.name}</p>
-                <div className="mt-3 flex gap-4 text-xs text-white/50">
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden />{meal.time}</span>
-                  <span className="inline-flex items-center gap-1"><Flame className="h-3.5 w-3.5" aria-hidden />{meal.calories} kcal</span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+                <span>
+                  <span className={cn('font-semibold', isToday ? 'text-emerald-400' : 'text-white')}>{DAY_LABELS[day]}</span>
+                  <span className="ml-2 text-xs text-white/40">{date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                </span>
+                <span className="flex items-center gap-2 text-xs text-white/40">
+                  {!isOpen && <span className="hidden max-w-[10rem] truncate min-[400px]:inline">{plan.days[day].dinner.title}</span>}
+                  <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} aria-hidden />
+                </span>
+              </button>
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="grid gap-2 px-3 pb-3 sm:grid-cols-3">
+                      {MEAL_SLOTS.map((slot) => (
+                        <MealButton key={slot} slot={slot} meal={plan.days[day][slot]} onClick={() => onSelectMeal({ day, slot, meal: plan.days[day][slot] })} />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+          );
+        })}
       </div>
-    </Card>
+    </>
   );
 }

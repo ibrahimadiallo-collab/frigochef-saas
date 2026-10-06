@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 // Font di sistema (niente next/font/google per evitare download di rete in build).
 
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className="scroll-smooth">
       <body className="min-h-screen bg-[#0a0a0a] font-sans text-neutral-100 antialiased selection:bg-emerald-500/30">
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

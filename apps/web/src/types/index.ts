@@ -127,24 +127,44 @@ export interface RecipeRow {
   created_at: string;
 }
 
-export interface MealSlot {
-  name: string;
-  time: string;
-  calories: number;
+export const WEEK_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+export type WeekDay = (typeof WEEK_DAYS)[number];
+export const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner'] as const;
+export type MealSlotKey = (typeof MEAL_SLOTS)[number];
+
+export const SHOPPING_CATEGORIES = ['vegetable', 'fruit', 'meat', 'dairy', 'grain', 'condiment', 'beverage', 'other'] as const;
+export type ShoppingCategory = (typeof SHOPPING_CATEGORIES)[number];
+
+export interface PlannedMeal {
+  title: string;
+  /** Minuti di preparazione. */
+  prepTime: number;
+  ingredients: string[];
 }
 
-export interface MealPlanDay {
-  day: string;
-  breakfast: MealSlot;
-  lunch: MealSlot;
-  dinner: MealSlot;
+export type DayMeals = Record<MealSlotKey, PlannedMeal>;
+
+export interface PlanShoppingItem {
+  name: string;
+  quantity?: number;
+  unit?: string;
+  category: ShoppingCategory;
+}
+
+/** Contenuto (colonna JSONB `plan`) di un piano settimanale generato dall'AI. */
+export interface MealPlanContent {
+  weekStart: string;
+  days: Record<WeekDay, DayMeals>;
+  shoppingList: PlanShoppingItem[];
+  usedPantryItems: string[];
+  estimatedWasteReduction?: number;
 }
 
 export interface MealPlan {
   id: string;
   user_id: string;
   week_start: string;
-  plan: { days: MealPlanDay[] };
+  plan: MealPlanContent;
   created_at: string;
 }
 
@@ -168,7 +188,17 @@ export interface Profile {
   referred_by: string | null;
   is_pro: boolean;
   stripe_customer_id: string | null;
+  /** Pro temporaneo (premi referral). */
+  pro_expires_at: string | null;
+  referral_claimed_at: string | null;
   created_at: string;
+}
+
+export interface ReferralInfo {
+  referralCode: string;
+  totalInvited: number;
+  rewards: { label: string; days: number }[];
+  proExpiresAt: string | null;
 }
 
 export interface FreshnessSummary {

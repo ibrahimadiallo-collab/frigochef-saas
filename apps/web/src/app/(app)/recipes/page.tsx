@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChefHat, Sparkles, UtensilsCrossed } from 'lucide-react';
 import type { MealType, Recipe } from '@/types';
 import { apiFetch, errorMessage } from '@/lib/http';
+import { EVENTS, trackEvent } from '@/lib/analytics';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,10 +36,14 @@ function RecipesView() {
   const searchParams = useSearchParams();
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(searchParams.get('generate') === '1');
+  const [dialogOpen, setDialogOpen] = useState(Boolean(searchParams.get('generate')));
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-  const [options, setOptions] = useState<GenerateOptions>({ preferences: '', mealType: 'dinner', servings: 2 });
+  const [options, setOptions] = useState<GenerateOptions>(() => {
+    // Dal meal plan arriva ?generate=<titolo del piatto>: lo usiamo come preferenza iniziale.
+    const fromPlan = searchParams.get('generate');
+    return { preferences: fromPlan && fromPlan !== '1' ? `Recipe for: ${fromPlan.slice(0, 280)}` : '', mealType: 'dinner', servings: 2 };
+  });
 
   const load = useCallback(async () => {
     setError(null);
@@ -71,6 +76,7 @@ function RecipesView() {
         }),
       });
       setRecipes((list) => [recipe, ...(list ?? [])]);
+      trackEvent(EVENTS.RECIPE_GENERATED, { recipeId: recipe.id, mealType: options.mealType, source: 'recipes' });
     } catch (err) {
       setGenerateError(errorMessage(err));
     } finally {

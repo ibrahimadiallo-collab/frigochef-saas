@@ -3,6 +3,8 @@ import { Camera, CalendarDays, ChefHat, Check, Leaf, Package, Radar, Sparkles } 
 import { MarketingNav } from '@/components/layout/MarketingNav';
 import { Reveal } from '@/components/landing/Reveal';
 import { buttonClasses } from '@/components/ui/Button';
+import { TrackView } from '@/components/landing/TrackView';
+import { FREE_LIMITS, PRO_PRICE_LABEL } from '@/lib/pricing';
 
 const FEATURES = [
   { id: 'vision', icon: Camera, title: 'Fridge Vision', text: 'Snap a photo of your fridge. AI detects every ingredient, its quantity and freshness in seconds.' },
@@ -26,8 +28,8 @@ const TESTIMONIALS = [
 ] as const;
 
 const PLANS = [
-  { name: 'Free', price: '€0', features: ['3 fridge scans per month', 'Pantry tracking', 'Freshness Radar', '5 AI recipes per month'], cta: 'Start free', highlighted: false },
-  { name: 'Pro', price: '€4.99', features: ['Unlimited scans', 'Unlimited AI recipes', 'Weekly meal planning', 'Cook Mode with timers', 'Priority AI models'], cta: 'Go Pro', highlighted: true },
+  { name: 'Free', price: '€0', features: [`${FREE_LIMITS.scansPerMonth} fridge scans per month`, 'Pantry tracking', 'Freshness Radar', '1 AI meal plan'], cta: 'Start free', highlighted: false },
+  { name: 'Pro', price: PRO_PRICE_LABEL, features: ['Unlimited scans', 'Unlimited AI recipes', 'Weekly meal planning', 'Cook Mode with timers', 'Priority AI models'], cta: 'Go Pro', highlighted: true },
 ] as const;
 
 const FAQS = [
@@ -52,6 +54,7 @@ function SectionTitle({ eyebrow, title, text }: { eyebrow: string; title: string
 export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#0a0a0a] text-white">
+      <TrackView />
       <MarketingNav />
 
       {/* 1. Hero */}

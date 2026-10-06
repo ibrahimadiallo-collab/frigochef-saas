@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { INGREDIENT_CATEGORIES, FRESHNESS_STATUSES, type IngredientCategory } from '@/types';
+import { INGREDIENT_CATEGORIES, FRESHNESS_STATUSES, SHOPPING_CATEGORIES, type IngredientCategory } from '@/types';
 
 // ---------- Helpers ----------
 
@@ -145,20 +145,80 @@ export type AiRecipe = z.infer<typeof aiRecipeSchema>;
 
 // ---------- AI output: meal plan ----------
 
-const mealSlotSchema = z.object({
-  name: z.string().trim().min(1),
-  time: z.preprocess((v) => (typeof v === 'number' ? `${v} min` : v), z.string().catch('30 min')),
-  calories: looseNumber.transform((n) => Math.round(n ?? 0)),
+const plannedMealSchema = z.object({
+  title: z.string().trim().min(1),
+  prepTime: looseNumber.transform((n) => Math.max(0, Math.round(n ?? 0))),
+  ingredients: z.array(z.string().trim().min(1)).catch([]),
 });
 
-export const mealPlanDaySchema = z.object({
-  day: z.string().trim().min(1),
-  breakfast: mealSlotSchema,
-  lunch: mealSlotSchema,
-  dinner: mealSlotSchema,
+const dayMealSchema = z.object({ breakfast: plannedMealSchema, lunch: plannedMealSchema, dinner: plannedMealSchema });
+
+export const shoppingCategorySchema = z.preprocess(
+  (v) => {
+    const c = normalizeCategory(v);
+    return c === 'fish' ? 'meat' : c;
+  },
+  z.enum(SHOPPING_CATEGORIES),
+);
+
+const optionalNumber = z.preprocess(
+  (v) => (v === null || v === '' ? undefined : typeof v === 'string' ? parseFloat(v) : v),
+  z.number().finite().nonnegative().optional().catch(undefined),
+);
+
+export const planShoppingItemSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  quantity: optionalNumber,
+  unit: z.preprocess((v) => (v === null || v === '' ? undefined : v), z.string().trim().max(30).optional()),
+  category: shoppingCategorySchema,
 });
 
-export const mealPlanSchema = z.array(mealPlanDaySchema).min(1).max(7);
+export const mealPlanSchema = z.object({
+  weekStart: z.string(),
+  days: z.object({
+    monday: dayMealSchema,
+    tuesday: dayMealSchema,
+    wednesday: dayMealSchema,
+    thursday: dayMealSchema,
+    friday: dayMealSchema,
+    saturday: dayMealSchema,
+    sunday: dayMealSchema,
+  }),
+  shoppingList: z.array(planShoppingItemSchema).catch([]),
+  usedPantryItems: z.array(z.string()).catch([]),
+  estimatedWasteReduction: z.preprocess((v) => (v === null ? undefined : v), z.number().finite().optional().catch(undefined)),
+});
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the YYYY-MM-DD date format');
+
+export const mealPlanRequestSchema = z.object({
+  weekStart: isoDate.optional(),
+  preferences: z.string().trim().max(300).optional(),
+  servings: z.number().int().min(1).max(12).optional(),
+});
+
+// ---------- Shopping list ----------
+
+export const shoppingItemInputSchema = planShoppingItemSchema.extend({
+  recipeId: z.string().uuid().optional(),
+});
+
+export const shoppingBulkSchema = z.object({
+  items: z.array(shoppingItemInputSchema).min(1, 'Add at least one item').max(100),
+});
+
+export const shoppingItemUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    quantity: z.number().finite().nonnegative().nullable(),
+    unit: z.string().trim().max(30).nullable(),
+    checked: z.boolean(),
+    category: shoppingCategorySchema,
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'Nothing to update');
+
+export const referralClaimSchema = z.object({ code: z.string().trim().min(4).max(40) });
 
 /** Primo messaggio di errore leggibile da uno ZodError. */
 export function firstZodMessage(error: z.ZodError): string {

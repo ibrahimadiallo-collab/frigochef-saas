@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/supabase/server';
 import { prepareImage, analyzeFridgeImage } from '@/lib/vision';
 import { jsonError, serverError, unauthorized } from '@/lib/api';
+import { getUsage, scanLimitReached } from '@/lib/usage';
+import { FREE_LIMITS } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,6 +16,10 @@ export async function POST(req: Request) {
   try {
     const auth = await getAuthContext(req);
     if (!auth) return unauthorized();
+
+    if (scanLimitReached(await getUsage(auth.supabase, auth.user.id))) {
+      return jsonError(`You've used your ${FREE_LIMITS.scansPerMonth} free scans this month. Upgrade to Pro for unlimited scans.`, 402);
+    }
 
     let form: FormData;
     try {
