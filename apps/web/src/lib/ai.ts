@@ -31,9 +31,9 @@ export type MealPlan = DayPlan[];
 
 export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
   if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
-  
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-2.0-flash',
     contents: `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.
 Calcola accuratamente calorie e macro-nutrienti (proteine, carboidrati, grassi).
@@ -56,8 +56,8 @@ Rispondi SOLO con JSON valido:
 }`
   });
 
-  const text = response.text;
-  
+  const text = response.text || '';
+
   try {
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
@@ -71,8 +71,8 @@ Rispondi SOLO con JSON valido:
       ingredienti: Array.isArray(parsed.ingredienti) ? parsed.ingredienti : [],
       passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : []
     };
-  } catch (err) {
-    console.error("Gemini 3.5 Parsing Error:", text);
+  } catch {
+    console.error("Gemini 2.0 Parsing Error:", text);
     throw new Error("L'IA ha generato un formato non valido. Riprova.");
   }
 }
@@ -81,7 +81,7 @@ export async function generateMealPlan(ingredients: string): Promise<MealPlan> {
   if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-2.0-flash',
     contents: `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
 Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e sostenibile.
 Rispondi SOLO con un array JSON di 7 oggetti.
@@ -94,13 +94,13 @@ Ogni oggetto deve avere:
 }`
   });
 
-  const text = response.text;
-  
+  const text = response.text || '';
+
   try {
     const clean = text.replace(/```json|```/g, '').trim();
     return JSON.parse(clean);
-  } catch (err) {
-    console.error("Gemini 3.5 Meal Plan Error:", text);
+  } catch {
+    console.error("Gemini 2.0 Meal Plan Error:", text);
     throw new Error("Errore durante la generazione del piano alimentare.");
   }
 }

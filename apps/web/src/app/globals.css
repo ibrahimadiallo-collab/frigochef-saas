@@ -1,41 +1,285 @@
 @import "tailwindcss";
 
+/* =========================================
+   FRIGOCHEF 2.0 — Design System
+   Brand: Premium Natural Kitchen
+   ========================================= */
+
 :root {
-  --background: #020202;
-  --foreground: #f5f5f5;
-  --accent: #10b981; /* Emerald accent for a fresh, techy feel */
-  --accent-foreground: #ffffff;
-  --border: #1a1a1a;
-  --muted: #888888;
-  --card: #0a0a0a;
+  /* --- Palette Brand --- */
+  --fc-forest:    #174C3C;   /* Forest Green — logo, header, accenti forti */
+  --fc-fresh:     #328567;   /* Fresh Green — CTA, pulsanti, stati positivi  */
+  --fc-sage:      #A8BDA5;   /* Sage — elementi secondari, dividers */
+  --fc-cream:     #F7F6EF;   /* Cream — sfondo principale */
+  --fc-lime:      #D9E9A3;   /* Lime — highlights, risparmi, freschi */
+  --fc-coral:     #E98B70;   /* Coral — avvisi, "usa presto" */
+  --fc-charcoal:  #252C28;   /* Charcoal — testo principale */
+
+  /* --- Surface --- */
+  --fc-white:     #FFFFFF;
+  --fc-card:      #FFFFFF;
+  --fc-border:    rgba(23, 76, 60, 0.10);
+  --fc-border-md: rgba(23, 76, 60, 0.18);
+  --fc-shadow-sm: 0 1px 4px rgba(23, 76, 60, 0.06);
+  --fc-shadow-md: 0 4px 24px rgba(23, 76, 60, 0.10);
+  --fc-shadow-lg: 0 8px 48px rgba(23, 76, 60, 0.14);
+
+  /* --- Semantic --- */
+  --background:   var(--fc-cream);
+  --foreground:   var(--fc-charcoal);
+  --card-bg:      var(--fc-card);
+  --accent:       var(--fc-fresh);
+  --accent-light: var(--fc-lime);
+  --danger:       var(--fc-coral);
+  --muted:        var(--fc-sage);
+
+  /* --- Radius --- */
+  --radius-sm:  10px;
+  --radius-md:  16px;
+  --radius-lg:  24px;
+  --radius-xl:  32px;
+  --radius-2xl: 40px;
+
+  /* --- Typography --- */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* =========================================
+   BASE
+   ========================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  font-family: var(--font-geist-sans), sans-serif;
-  background-color: var(--background);
-  color: var(--foreground);
+  font-family: var(--font-sans);
+  background-color: var(--fc-cream);
+  color: var(--fc-charcoal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
-.font-mono {
-  font-family: var(--font-geist-mono), monospace;
+/* =========================================
+   TIPOGRAFIA
+   ========================================= */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  color: var(--fc-charcoal);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
-/* Linear-style smooth transitions */
-* {
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+/* =========================================
+   UTILITY CLASSES
+   ========================================= */
+
+/* Card standard */
+.fc-card {
+  background: var(--fc-card);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--fc-shadow-sm);
 }
 
-/* Custom Scrollbar for dark mode */
+.fc-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.fc-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--fc-shadow-md);
+  border-color: var(--fc-border-md);
+}
+
+/* Badge freschezza */
+.fc-badge-fresh {
+  background: rgba(217, 233, 163, 0.5);
+  color: #2d5a1b;
+  border: 1px solid rgba(217, 233, 163, 0.8);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fc-badge-soon {
+  background: rgba(233, 139, 112, 0.15);
+  color: #c0533a;
+  border: 1px solid rgba(233, 139, 112, 0.35);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fc-badge-check {
+  background: rgba(168, 189, 165, 0.25);
+  color: #4a6349;
+  border: 1px solid rgba(168, 189, 165, 0.5);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Pulsante primario */
+.fc-btn-primary {
+  background: var(--fc-forest);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: 12px 28px;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 12px rgba(23, 76, 60, 0.25);
+}
+.fc-btn-primary:hover {
+  background: var(--fc-fresh);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(50, 133, 103, 0.35);
+}
+.fc-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Pulsante secondario */
+.fc-btn-secondary {
+  background: transparent;
+  color: var(--fc-forest);
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: 11px 24px;
+  border: 1.5px solid var(--fc-border-md);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.fc-btn-secondary:hover {
+  background: rgba(23, 76, 60, 0.05);
+  border-color: var(--fc-fresh);
+}
+
+/* Chip ingrediente */
+.fc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(50, 133, 103, 0.10);
+  color: var(--fc-fresh);
+  border: 1px solid rgba(50, 133, 103, 0.22);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+.fc-chip:hover {
+  background: rgba(50, 133, 103, 0.18);
+}
+
+/* Label sezione */
+.fc-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fc-sage);
+}
+
+/* Sezione hero stat */
+.fc-stat-card {
+  background: var(--fc-card);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--fc-shadow-sm);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.fc-stat-card:hover {
+  box-shadow: var(--fc-shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Input premium */
+.fc-input {
+  width: 100%;
+  background: var(--fc-card);
+  border: 1.5px solid var(--fc-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  color: var(--fc-charcoal);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.fc-input:focus {
+  border-color: var(--fc-fresh);
+  box-shadow: 0 0 0 3px rgba(50, 133, 103, 0.12);
+}
+.fc-input::placeholder {
+  color: var(--fc-sage);
+}
+
+/* =========================================
+   SCROLLBAR
+   ========================================= */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: var(--fc-cream);
 }
 ::-webkit-scrollbar-thumb {
-  background: #222;
-  border-radius: 10px;
+  background: var(--fc-sage);
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  background: var(--fc-forest);
+}
+
+/* =========================================
+   ANIMAZIONI
+   ========================================= */
+@keyframes fc-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fc-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fc-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.fc-animate-up  { animation: fc-fade-up  0.5s ease both; }
+.fc-animate-in  { animation: fc-fade-in  0.4s ease both; }
+.fc-pulse-dot   { animation: fc-pulse-dot 2s infinite; }
+
+/* Stagger utility */
+.fc-delay-1 { animation-delay: 0.05s; }
+.fc-delay-2 { animation-delay: 0.10s; }
+.fc-delay-3 { animation-delay: 0.15s; }
+.fc-delay-4 { animation-delay: 0.20s; }
+.fc-delay-5 { animation-delay: 0.25s; }
+
+/* =========================================
+   TRANSIZIONI GLOBALI (selettive)
+   ========================================= */
+a, button {
+  transition: color 0.15s ease, background 0.15s ease,
+              border-color 0.15s ease, box-shadow 0.15s ease,
+              transform 0.15s ease, opacity 0.15s ease;
 }

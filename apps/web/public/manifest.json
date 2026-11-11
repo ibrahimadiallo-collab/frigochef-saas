@@ -1,0 +1,17 @@
+{
+  "name": "FrigoChef — La Tua Cucina, Più Intelligente",
+  "short_name": "FrigoChef",
+  "description": "Il tuo assistente intelligente che conosce la tua cucina, organizza i tuoi pasti, ti aiuta a risparmiare e riduce gli sprechi alimentari.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F6EF",
+  "theme_color": "#174C3C",
+  "lang": "it-IT",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

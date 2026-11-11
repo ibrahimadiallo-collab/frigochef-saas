@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, X, Sparkles, Share2, Link as LinkIcon, Check } from 'lucide-react';
+import { Download, X, Sparkles, Link as LinkIcon, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Recipe {
@@ -31,7 +31,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [previewScale, setPreviewScale] = useState(0.3);
+  const [previewScale, setPreviewScale] = useState(0.28);
 
   useEffect(() => {
     if (!isOpen || !previewContainerRef.current) return;
@@ -46,7 +46,6 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
 
     updateScale();
     window.addEventListener('resize', updateScale);
-    // Short delay to ensure DOM is ready
     const timer = setTimeout(updateScale, 100);
 
     return () => {
@@ -57,7 +56,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
 
   const exportImage = async () => {
     if (!storyRef.current) return;
-    
+
     setIsExporting(true);
     try {
       const dataUrl = await toPng(storyRef.current, {
@@ -66,21 +65,22 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
         width: 1080,
         height: 1920,
       });
-      
+
       const link = document.createElement('a');
       link.download = `frigochef-${recipe.nome.toLowerCase().replace(/\s+/g, '-')}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
-      console.error('Export failed', err);
+      console.error('Esportazione fallita', err);
     } finally {
       setIsExporting(false);
     }
   };
 
   const copyRecipeLink = () => {
-    if (!recipe.id) return;
-    const url = `${window.location.origin}/recipe/${recipe.id}`;
+    const url = recipe.id
+      ? `${window.location.origin}/recipe/${recipe.id}`
+      : window.location.origin;
     navigator.clipboard.writeText(url);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
@@ -89,188 +89,268 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
-          <motion.div 
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(23,76,60,0.45)',
+              backdropFilter: 'blur(8px)',
+            }}
           />
-          
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative z-10 w-full max-w-4xl bg-white/[0.02] border border-white/10 rounded-[40px] overflow-hidden flex flex-col md:flex-row shadow-2xl"
+            exit={{ opacity: 0, scale: 0.94, y: 16 }}
+            className="fc-card"
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              width: '100%',
+              maxWidth: 820,
+              overflow: 'hidden',
+              display: 'grid',
+              gridTemplateColumns: '1fr 300px',
+            }}
           >
             {/* Preview Section */}
-            <div className="flex-1 p-8 md:p-12 border-b md:border-b-0 md:border-r border-white/10 flex flex-col items-center justify-center bg-black/40">
-              <div 
+            <div
+              style={{
+                padding: 32,
+                borderRight: '1px solid var(--fc-border)',
+                background: 'var(--fc-cream)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <div
                 ref={previewContainerRef}
-                className="relative w-full aspect-[9/16] max-h-[60vh] md:max-h-[70vh] shadow-2xl rounded-2xl overflow-hidden border border-white/10"
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  maxWidth: 260,
+                  aspectRatio: '9 / 16',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  boxShadow: 'var(--shadow-lg)',
+                  border: '1px solid var(--fc-border)',
+                }}
               >
-                {/* The actual element to be captured (Hidden from viewport scaling, scaled for preview) */}
-                <div 
+                {/* Actual 1080x1920 Story Canvas */}
+                <div
                   ref={storyRef}
-                  className="absolute inset-0 w-[1080px] h-[1920px] bg-neutral-950 text-white p-16 flex flex-col origin-top-left"
-                  style={{ transform: `scale(${previewScale})` }}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: 1080,
+                    height: 1920,
+                    background: '#174C3C',
+                    color: '#F7F6EF',
+                    padding: 72,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    transformOrigin: 'top left',
+                    transform: `scale(${previewScale})`,
+                  }}
                 >
-                  {/* Background Accents */}
-                  <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-emerald-500/10 blur-[120px] rounded-full -mr-96 -mt-96" />
-                  <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-emerald-500/5 blur-[100px] rounded-full -ml-48 -mb-48" />
-
-                  <div className="relative z-10 h-full flex flex-col">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-16">
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center">
-                          <Sparkles className="text-black" size={32} />
-                        </div>
-                        <div>
-                          <p className="text-3xl font-black tracking-tighter">FRIGO<span className="text-emerald-500">CHEF</span></p>
-                          <p className="text-sm font-bold text-white/40 tracking-[0.3em] uppercase">AI Masterpiece</p>
-                        </div>
-                      </div>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 64 }}>
+                    <div
+                      style={{
+                        width: 68,
+                        height: 68,
+                        background: '#D9E9A3',
+                        borderRadius: 20,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#174C3C',
+                      }}
+                    >
+                      <Sparkles size={34} />
                     </div>
-
-                    {/* Content */}
-                    <div className="flex-1 flex flex-col justify-center space-y-12">
-                      <h1 className="text-8xl font-black leading-[0.9] tracking-tighter">
-                        {recipe.nome}
-                      </h1>
-
-                      <div className="flex gap-8">
-                        <div className="bg-white/5 border border-white/10 px-8 py-4 rounded-3xl">
-                          <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-1">Time</p>
-                          <p className="text-2xl font-bold">{recipe.tempo}</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 px-8 py-4 rounded-3xl">
-                          <p className="text-xs font-bold text-white/20 uppercase tracking-widest mb-1">Difficulty</p>
-                          <p className="text-2xl font-bold">{recipe.difficolta}</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <p className="text-xs font-bold text-emerald-500 uppercase tracking-[0.4em]">Ingredients</p>
-                        <div className="grid grid-cols-1 gap-4">
-                          {recipe.ingredienti.slice(0, 6).map((ing, i) => (
-                            <div key={i} className="flex items-center gap-4 text-3xl font-medium text-white/80">
-                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                              {ing}
-                            </div>
-                          ))}
-                          {recipe.ingredienti.length > 6 && (
-                            <p className="text-2xl font-bold text-white/20 pl-6">
-                              + {recipe.ingredienti.length - 6} more
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Footer / Nutrition */}
-                    {recipe.nutrizione && (
-                      <div className="grid grid-cols-4 gap-6 p-10 bg-emerald-500/10 border border-emerald-500/20 rounded-[40px] mt-auto">
-                        <div className="text-center">
-                          <p className="text-4xl font-black text-white">{recipe.nutrizione.calorie}</p>
-                          <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Kcal</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-4xl font-black text-emerald-500">{recipe.nutrizione.proteine}</p>
-                          <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Protein</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-4xl font-black text-blue-400">{recipe.nutrizione.carboidrati}</p>
-                          <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Carbs</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-4xl font-black text-amber-400">{recipe.nutrizione.grassi}</p>
-                          <p className="text-xs font-bold text-white/30 uppercase tracking-widest">Fats</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-12 text-center">
-                      <p className="text-xl font-bold text-white/20 tracking-widest uppercase">
-                        Generate your own at <span className="text-emerald-500">frigochef.ai</span>
+                    <div>
+                      <p style={{ fontSize: 34, fontWeight: 900, letterSpacing: '-0.03em' }}>
+                        FrigoChef
+                      </p>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                        La Tua Cucina Intelligente
                       </p>
                     </div>
                   </div>
+
+                  {/* Main Body */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 48 }}>
+                    <h1 style={{ fontSize: 82, fontWeight: 900, lineHeight: 0.98, letterSpacing: '-0.03em', color: '#FFFFFF' }}>
+                      {recipe.nome}
+                    </h1>
+
+                    <div style={{ display: 'flex', gap: 24 }}>
+                      <div style={{ background: 'rgba(255,255,255,0.08)', padding: '20px 32px', borderRadius: 24 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 4 }}>
+                          Tempo
+                        </p>
+                        <p style={{ fontSize: 28, fontWeight: 800 }}>{recipe.tempo}</p>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.08)', padding: '20px 32px', borderRadius: 24 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 4 }}>
+                          Difficoltà
+                        </p>
+                        <p style={{ fontSize: 28, fontWeight: 800 }}>{recipe.difficolta}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p style={{ fontSize: 16, fontWeight: 800, color: '#D9E9A3', textTransform: 'uppercase', letterSpacing: '0.25em', marginBottom: 24 }}>
+                        Ingredienti Principali
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {recipe.ingredienti.slice(0, 6).map((ing, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 30, fontWeight: 600 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#D9E9A3' }} />
+                            {ing}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer Nutrition */}
+                  {recipe.nutrizione && (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
+                        gap: 20,
+                        padding: 40,
+                        background: 'rgba(217,233,163,0.12)',
+                        border: '2px solid rgba(217,233,163,0.25)',
+                        borderRadius: 36,
+                        marginTop: 'auto',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div>
+                        <p style={{ fontSize: 38, fontWeight: 900 }}>{recipe.nutrizione.calorie}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase' }}>Kcal</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 38, fontWeight: 900, color: '#D9E9A3' }}>{recipe.nutrizione.proteine}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase' }}>Proteine</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 38, fontWeight: 900 }}>{recipe.nutrizione.carboidrati}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase' }}>Carbo</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 38, fontWeight: 900, color: '#E98B70' }}>{recipe.nutrizione.grassi}</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#A8BDA5', textTransform: 'uppercase' }}>Grassi</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              <p className="mt-6 text-sm text-white/40 font-medium">Instagram Story Preview (9:16)</p>
+              <p style={{ marginTop: 12, fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600 }}>
+                Anteprima Storia Instagram (9:16)
+              </p>
             </div>
 
             {/* Controls Section */}
-            <div className="w-full md:w-80 p-8 md:p-12 flex flex-col justify-between">
-              <div className="space-y-8">
-                <div className="flex justify-between items-start">
+            <div style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#fff' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                   <div>
-                    <h3 className="text-xl font-bold text-white">Social Share</h3>
-                    <p className="text-sm text-white/40 mt-1">Ready to go viral?</p>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--fc-forest)' }}>Condividi Ricetta</h3>
+                    <p style={{ fontSize: 12, color: 'var(--fc-sage)', marginTop: 2 }}>Pronta per i tuoi social</p>
                   </div>
-                  <button 
+                  <button
                     onClick={onClose}
-                    className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      border: '1px solid var(--fc-border)',
+                      background: 'var(--fc-cream)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
                   >
-                    <X className="text-white/40" />
+                    <X size={15} />
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
-                    <div className="flex items-center gap-3 text-emerald-500 mb-2">
-                      <Sparkles size={16} />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Instagram Story</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div
+                    style={{
+                      padding: 14,
+                      background: 'var(--fc-cream)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--fc-border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fc-fresh)', marginBottom: 4 }}>
+                      <Sparkles size={14} />
+                      <span className="fc-label" style={{ color: 'var(--fc-fresh)' }}>Formato Storia</span>
                     </div>
-                    <p className="text-xs text-white/60 leading-relaxed">
-                      Optimized for 1080x1920px. Perfect for Stories, Reels, and TikTok.
+                    <p style={{ fontSize: 12, color: 'var(--fc-charcoal)', opacity: 0.75, lineHeight: 1.5 }}>
+                      Ottimizzata in 1080×1920px per Instagram Stories, Reels e WhatsApp.
                     </p>
                   </div>
 
-                  <button 
+                  <button
                     onClick={copyRecipeLink}
-                    disabled={!recipe.id}
-                    className="w-full p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between group hover:bg-emerald-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="fc-btn-secondary"
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 14px',
+                    }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="text-emerald-500">
-                        {isCopied ? <Check size={16} /> : <LinkIcon size={16} />}
-                      </div>
-                      <div className="text-left">
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Public Link</p>
-                        <p className="text-xs text-white/40">Copy for SEO sharing</p>
-                      </div>
-                    </div>
-                    {isCopied && <span className="text-[10px] font-bold text-emerald-500 uppercase">COPIED</span>}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      {isCopied ? <Check size={15} style={{ color: 'var(--fc-fresh)' }} /> : <LinkIcon size={15} />}
+                      {isCopied ? 'Link copiato!' : 'Copia Link Ricetta'}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-3 pt-8">
-                <button 
-                  onClick={exportImage}
-                  disabled={isExporting}
-                  className="w-full h-16 bg-white text-black rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-emerald-400 transition-all disabled:opacity-50"
-                >
-                  {isExporting ? (
-                    <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Download size={20} />
-                      DOWNLOAD IMAGE
-                    </>
-                  )}
-                </button>
-                <button 
-                  disabled
-                  className="w-full h-16 bg-white/5 text-white/20 border border-white/10 rounded-2xl font-bold flex items-center justify-center gap-3 cursor-not-allowed"
-                >
-                  <Share2 size={20} />
-                  DIRECT SHARE (COMING)
-                </button>
-              </div>
+              <button
+                onClick={exportImage}
+                disabled={isExporting}
+                className="fc-btn-primary"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '14px',
+                }}
+              >
+                <Download size={17} />
+                {isExporting ? 'Generazione immagine…' : 'Scarica Immagine'}
+              </button>
             </div>
           </motion.div>
         </div>

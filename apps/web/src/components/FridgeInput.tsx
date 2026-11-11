@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, KeyboardEvent, useRef, ChangeEvent } from 'react';
-import { X, Camera, Loader2 } from 'lucide-react';
+import { X, Camera, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FridgeInputProps {
@@ -41,7 +41,6 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
     if (!file) return;
 
     setIsAnalyzing(true);
-    
     try {
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -51,18 +50,17 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64 }),
         });
-        
         const data = await res.json();
         if (data.items) {
           const names = data.items.map((i: { name: string }) => i.name);
-          const newTags = [...new Set([...tags, ...names])];
+          const newTags = [...new Set([...tags, ...names])] as string[];
           setTags(newTags);
           if (onItemsAnalyzed) onItemsAnalyzed(data.items);
         }
       };
       reader.readAsDataURL(file);
     } catch (err) {
-      console.error("Error analyzing image:", err);
+      console.error('Errore analisi immagine:', err);
     } finally {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -70,83 +68,171 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <label className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30">
-          Your Ingredients
-        </label>
-        
-        <button 
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <label className="fc-label">I tuoi ingredienti</label>
+
+        <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isAnalyzing}
-          className="flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-emerald-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--fc-fresh)',
+            background: 'rgba(50,133,103,0.08)',
+            border: '1px solid rgba(50,133,103,0.2)',
+            borderRadius: 8,
+            padding: '5px 12px',
+            cursor: 'pointer',
+            opacity: isAnalyzing ? 0.6 : 1,
+          }}
         >
           {isAnalyzing ? (
             <>
               <Loader2 size={12} className="animate-spin" />
-              Scanning...
+              Analisi in corso…
             </>
           ) : (
             <>
               <Camera size={12} />
-              Snap Photo
+              Fotografa il frigo
             </>
           )}
         </button>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={handleFileUpload} 
-          accept="image/*" 
-          capture="environment" 
-          className="hidden" 
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept="image/*"
+          capture="environment"
+          className="hidden"
         />
       </div>
 
-      <div 
-        className="min-h-[140px] p-4 bg-white/[0.03] border border-white/10 rounded-[20px] flex flex-wrap gap-2 content-start focus-within:border-emerald-500/50 transition-all cursor-text group shadow-inner" 
+      {/* Area ingredienti */}
+      <div
+        style={{
+          minHeight: 130,
+          padding: 14,
+          background: '#fff',
+          border: '1.5px solid var(--fc-border)',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignContent: 'flex-start',
+          cursor: 'text',
+          transition: 'border-color 0.2s, box-shadow 0.2s',
+        }}
         onClick={() => document.getElementById('ing-input')?.focus()}
+        onFocusCapture={(e) => {
+          const el = e.currentTarget as HTMLDivElement;
+          el.style.borderColor = 'var(--fc-fresh)';
+          el.style.boxShadow = '0 0 0 3px rgba(50,133,103,0.12)';
+        }}
+        onBlurCapture={(e) => {
+          const el = e.currentTarget as HTMLDivElement;
+          el.style.borderColor = 'var(--fc-border)';
+          el.style.boxShadow = 'none';
+        }}
       >
         <AnimatePresence>
           {tags.map((tag, i) => (
             <motion.span
               key={tag}
-              initial={{ opacity: 0, scale: 0.8, y: 5 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 5 }}
-              className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-sm font-semibold hover:bg-emerald-500/20 transition-colors"
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ duration: 0.15 }}
+              className="fc-chip"
             >
               {tag}
-              <button 
+              <button
                 onClick={(e) => { e.stopPropagation(); removeTag(i); }}
-                className="hover:bg-white/10 rounded-lg p-0.5 transition-colors"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  background: 'rgba(50,133,103,0.15)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--fc-fresh)',
+                  flexShrink: 0,
+                }}
+                aria-label={`Rimuovi ${tag}`}
               >
-                <X size={14} />
+                <X size={10} />
               </button>
             </motion.span>
           ))}
         </AnimatePresence>
+
         <input
           id="ing-input"
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={tags.length === 0 ? "What's in your fridge?" : ""}
-          className="flex-1 min-w-[150px] bg-transparent outline-none text-sm py-1.5 text-white placeholder:text-white/10"
+          placeholder={
+            tags.length === 0
+              ? 'Es. pasta, uova, zucchine… premi Invio per aggiungere'
+              : ''
+          }
+          style={{
+            flex: 1,
+            minWidth: 160,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: 14,
+            color: 'var(--fc-charcoal)',
+            padding: '4px 2px',
+            fontFamily: 'var(--font-sans)',
+          }}
         />
       </div>
 
-      <div className="flex justify-between items-center px-1">
-        <p className="text-[10px] text-white/20 font-medium">
-          Type and press <kbd className="bg-white/5 px-1.5 py-0.5 rounded border border-white/5 text-white/40">Enter</kbd>
+      {/* Footer hint */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingInline: 2 }}>
+        <p style={{ fontSize: 12, color: 'var(--fc-sage)' }}>
+          Scrivi un ingrediente e premi{' '}
+          <kbd
+            style={{
+              background: '#fff',
+              border: '1px solid var(--fc-border)',
+              borderRadius: 5,
+              padding: '1px 6px',
+              fontSize: 11,
+              fontFamily: 'var(--font-sans)',
+              color: 'var(--fc-charcoal)',
+            }}
+          >
+            Invio
+          </kbd>
         </p>
-        <button 
-          onClick={() => setTags([])}
-          className="text-[10px] text-white/20 hover:text-red-400 transition-colors font-medium"
-        >
-          Clear All
-        </button>
+        {tags.length > 0 && (
+          <button
+            onClick={() => setTags([])}
+            style={{
+              fontSize: 12,
+              color: 'var(--fc-coral)',
+              fontWeight: 600,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Svuota tutto
+          </button>
+        )}
       </div>
     </div>
   );

@@ -44,73 +44,130 @@ export default function MyRecipesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#020202] flex items-center justify-center">
-        <Loader2 className="animate-spin text-emerald-500" size={40} />
+      <div style={{ minHeight: '100vh', background: 'var(--fc-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 className="animate-spin" style={{ color: 'var(--fc-fresh)' }} size={36} />
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col bg-[#020202] text-white">
+    <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--fc-cream)' }}>
       <Navbar />
-      
-      <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-20 md:py-32 relative">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-emerald-500/10 blur-[120px] pointer-events-none" />
 
-        <div className="space-y-12">
-          <header className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold tracking-widest uppercase border border-emerald-500/20">
-              <BookOpen size={12} /> Personal Collection
+      <div style={{ maxWidth: 1120, margin: '0 auto', width: '100%', padding: '40px 24px 80px', display: 'flex', flexDirection: 'column', gap: 36 }}>
+        <header>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 14px',
+              borderRadius: 999,
+              background: 'rgba(217,233,163,0.5)',
+              border: '1px solid rgba(217,233,163,0.9)',
+              marginBottom: 14,
+            }}
+          >
+            <BookOpen size={12} style={{ color: 'var(--fc-forest)' }} />
+            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              Ricettario Personale
+            </span>
+          </div>
+          <h1 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '-0.03em', marginBottom: 8 }}>
+            Le Mie Ricette
+          </h1>
+          <p style={{ fontSize: 15, color: 'var(--fc-sage)', maxWidth: 480 }}>
+            Tutte le ricette che hai creato con l&apos;AI, salvate in un unico posto per cucinarle quando vuoi.
+          </p>
+        </header>
+
+        {!user ? (
+          <div
+            className="fc-card"
+            style={{
+              padding: '56px 32px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: 20,
+                background: 'rgba(23,76,60,0.07)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--fc-sage)',
+              }}
+            >
+              <ChefHat size={34} />
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tighter">
-              My Recipes
-            </h1>
-            <p className="text-white/40 text-lg max-w-lg">
-              Every masterpiece you&apos;ve generated, saved in one place.
+            <h3 style={{ fontSize: 20, fontWeight: 800, color: 'var(--fc-forest)' }}>
+              Accedi per vedere il tuo ricettario
+            </h3>
+            <p style={{ fontSize: 14, color: 'var(--fc-sage)', maxWidth: 380, lineHeight: 1.6 }}>
+              Le ricette vengono salvate automaticamente sul tuo account così puoi consultarle da qualsiasi dispositivo.
             </p>
-          </header>
-
-          {!user ? (
-            <div className="p-12 bg-white/[0.02] border border-white/5 rounded-[40px] text-center space-y-6">
-              <ChefHat size={48} className="mx-auto text-white/10" />
-              <h3 className="text-2xl font-bold">Sign in to see your collection</h3>
-              <p className="text-white/40 max-w-md mx-auto">
-                Your recipes are saved to your account so you can access them anywhere.
-              </p>
-              <Link 
-                href="/" 
-                className="inline-flex h-14 px-8 bg-white text-black rounded-2xl font-bold items-center justify-center hover:bg-emerald-500 transition-all"
-              >
-                Go to Home
-              </Link>
+            <Link
+              href="/"
+              className="fc-btn-primary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 8 }}
+            >
+              Torna alla Dashboard <ArrowRight size={16} />
+            </Link>
+          </div>
+        ) : recipes.length === 0 ? (
+          <div
+            className="fc-card"
+            style={{
+              padding: '56px 32px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: 20,
+                background: 'rgba(217,233,163,0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--fc-forest)',
+              }}
+            >
+              <Sparkles size={32} />
             </div>
-          ) : recipes.length === 0 ? (
-            <div className="p-12 bg-white/[0.02] border border-white/5 rounded-[40px] text-center space-y-6">
-              <Sparkles size={48} className="mx-auto text-white/10" />
-              <h3 className="text-2xl font-bold">No recipes yet</h3>
-              <p className="text-white/40 max-w-md mx-auto">
-                Start generating with AI to build your personal digital cookbook.
-              </p>
-              <Link 
-                href="/" 
-                className="inline-flex h-14 px-8 bg-emerald-500 text-black rounded-2xl font-bold items-center justify-center hover:bg-emerald-400 transition-all gap-2"
-              >
-                Generate First Recipe <ArrowRight size={18} />
-              </Link>
-            </div>
-          ) : (
-            <div className="grid gap-12">
-              {recipes.map((r) => (
-                <div key={r.id} className="relative group">
-                   <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-[42px] blur opacity-0 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                   <div className="relative">
-                     <RecipeCard recipe={{...r.recipe_data, id: r.id}} />
-                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            <h3 style={{ fontSize: 20, fontWeight: 800, color: 'var(--fc-forest)' }}>
+              Nessuna ricetta salvata
+            </h3>
+            <p style={{ fontSize: 14, color: 'var(--fc-sage)', maxWidth: 380, lineHeight: 1.6 }}>
+              Inizia a generare ricette con gli ingredienti del tuo frigo per costruire il tuo ricettario personale.
+            </p>
+            <Link
+              href="/"
+              className="fc-btn-primary"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 8 }}
+            >
+              Genera la tua prima ricetta <ArrowRight size={16} />
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+            {recipes.map((r) => (
+              <RecipeCard key={r.id} recipe={{ ...r.recipe_data, id: r.id }} />
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

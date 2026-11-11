@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { generateRecipe } from '@/lib/ai';
 import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase-admin';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const rate = checkRateLimit(req, 'recipe', 10, 60_000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: `Troppi tentativi. Riprova tra ${rate.retryAfterSeconds} secondi.` },
+        { status: 429 }
+      );
+    }
+
     const { ingredients, mealType, time } = await req.json();
 
     if (!ingredients) {
@@ -14,15 +23,16 @@ export async function POST(req: Request) {
 
     const recipe = await generateRecipe(ingredients, mealType, time);
     const user = await getUserFromRequest(req);
-    
-    // Genera uno slug semplice dal nome della ricetta
-    const slug = recipe.nome
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_]+/g, '-')
-      .replace(/^-+|-+$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
 
-    // Salva la ricetta nel database pubblico per SEO e condivisione
+    const slug =
+      recipe.nome
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/^-+|-+$/g, '') +
+      '-' +
+      Math.random().toString(36).substring(2, 7);
+
     const { data: savedRecipe, error: saveError } = await supabaseAdmin
       .from('recipes')
       .insert([
@@ -30,8 +40,8 @@ export async function POST(req: Request) {
           user_id: user?.id,
           recipe_data: recipe,
           slug,
-          is_public: true
-        }
+          is_public: true,
+        },
       ])
       .select()
       .single();
@@ -42,7 +52,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ...recipe,
-      id: savedRecipe?.id
+      id: savedRecipe?.id,
     });
   } catch (error: unknown) {
     console.error('API Error:', error);

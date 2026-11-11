@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { generateMealPlan } from '@/lib/ai';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const rate = checkRateLimit(req, 'meal-plan', 5, 60_000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: `Troppi tentativi. Riprova tra ${rate.retryAfterSeconds} secondi.` },
+        { status: 429 }
+      );
+    }
+
     const { ingredients } = await req.json();
 
     if (!ingredients) {

@@ -7,10 +7,10 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const signature = req.headers.get('stripe-signature')!;
+  const signature = req.headers.get('stripe-signature');
 
-  if (!stripe) {
-    return NextResponse.json({ error: 'Stripe is not configured' }, { status: 500 });
+  if (!stripe || !signature) {
+    return NextResponse.json({ error: 'Stripe non configurato o firma mancante' }, { status: 400 });
   }
 
   let event: Stripe.Event;
@@ -26,21 +26,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const userId = session.metadata?.userId;
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userId = session.metadata?.userId;
 
-    if (userId) {
-      const { error } = await supabaseAdmin
-        .from('profiles')
-        .update({ is_pro: true, stripe_customer_id: session.customer as string })
-        .eq('id', userId);
+      if (userId) {
+        const { error } = await supabaseAdmin
+          .from('profiles')
+          .update({ is_pro: true, stripe_customer_id: session.customer as string })
+          .eq('id', userId);
 
-      if (error) {
-        console.error('Error updating user pro status:', error);
-      } else {
-        console.log(`User ${userId} upgraded to Pro!`);
+        if (error) {
+          console.error('Error updating user pro status:', error);
+        }
       }
+      break;
+    }
+
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object as Stripe.Subscription;
+      const customerId = subscription.customer as string;
+      const isActive = ['active', 'trialing'].includes(subscription.status);
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({ is_pro: isActive })
+        .eq('stripe_customer_id', customerId);
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription;
+      const customerId = subscription.customer as string;
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({ is_pro: false })
+        .eq('stripe_customer_id', customerId);
+      break;
     }
   }
 

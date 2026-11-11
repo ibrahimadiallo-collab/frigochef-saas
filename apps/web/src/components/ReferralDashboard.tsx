@@ -25,7 +25,7 @@ export default function ReferralDashboard() {
           setStats(data);
         }
       } catch (err) {
-        console.error("Failed to fetch referrals:", err);
+        console.error('Impossibile caricare i dati referral:', err);
       } finally {
         setIsLoading(false);
       }
@@ -41,68 +41,132 @@ export default function ReferralDashboard() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (isLoading) return null;
-  if (!stats) return null;
+  if (isLoading || !stats) return null;
+
+  const progressPct = Math.min(100, (stats.inviteCount / 5) * 100);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/30 flex items-center gap-2">
-          <Trophy size={12} /> Viral Growth Hub
-        </h3>
-        <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-            {stats.inviteCount} Successful Invites
+    <div className="fc-card" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <span className="fc-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Trophy size={13} style={{ color: 'var(--fc-fresh)' }} />
+          Invita un Amico
+        </span>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: 'rgba(50,133,103,0.1)',
+            border: '1px solid rgba(50,133,103,0.2)',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--fc-fresh)',
+              display: 'inline-block',
+            }}
+          />
+          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--fc-fresh)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {stats.inviteCount} {stats.inviteCount === 1 ? 'Invito' : 'Inviti'}
           </span>
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/5 rounded-[32px] p-8 space-y-8 relative overflow-hidden">
-        {/* Decorative Circles */}
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/5 blur-[60px] rounded-full" />
-        
-        <div className="relative z-10 space-y-4">
-          <h4 className="text-2xl font-bold tracking-tight">Give 1 Month Pro,<br />Get 1 Month Pro.</h4>
-          <p className="text-white/40 text-sm max-w-xs leading-relaxed">
-            Share FrigoChef with your fellow cooks. When they join, you both unlock the full AI Masterpiece suite.
-          </p>
-        </div>
+      {/* Titolo & descrizione */}
+      <div style={{ marginBottom: 18 }}>
+        <h4 style={{ fontSize: 18, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '-0.02em', lineHeight: 1.25, marginBottom: 6 }}>
+          Regala 1 mese Pro, ricevi 1 mese Pro.
+        </h4>
+        <p style={{ fontSize: 13, color: 'var(--fc-sage)', lineHeight: 1.55 }}>
+          Condividi FrigoChef con chi ama cucinare. Quando si iscrivono, sbloccate entrambi le funzioni Pro.
+        </p>
+      </div>
 
-        <div className="space-y-4">
-          <p className="text-[10px] font-bold tracking-widest uppercase text-white/20">Your Unique Link</p>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-5 flex items-center text-sm font-mono text-white/60 overflow-hidden">
-              <span className="truncate whitespace-nowrap">frigochef.ai?ref={stats.referralCode}</span>
-            </div>
-            <button 
-              onClick={copyLink}
-              className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                copied ? 'bg-emerald-500 text-black' : 'bg-white text-black hover:bg-emerald-500'
-              }`}
-            >
-              {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-            </button>
+      {/* Link copiabile */}
+      <div style={{ marginBottom: 20 }}>
+        <label className="fc-label" style={{ display: 'block', marginBottom: 6 }}>
+          Il tuo link personale
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div
+            style={{
+              flex: 1,
+              background: 'var(--fc-cream)',
+              border: '1.5px solid var(--fc-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '10px 12px',
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: 'var(--fc-charcoal)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            frigochef.it?ref={stats.referralCode}
           </div>
+          <button
+            onClick={copyLink}
+            title="Copia link"
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              background: copied ? 'var(--fc-fresh)' : 'var(--fc-forest)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'background 0.2s',
+            }}
+          >
+            {copied ? <CheckCircle2 size={17} /> : <Copy size={17} />}
+          </button>
         </div>
+      </div>
 
-        {/* Milestone Tracker */}
-        <div className="pt-4 space-y-6">
-          <div className="flex justify-between items-end">
-            <p className="text-[10px] font-bold tracking-widest uppercase text-white/20">Next Milestone</p>
-            <p className="text-xs font-bold text-emerald-500">{stats.inviteCount} / 5 Invites</p>
-          </div>
-          <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, (stats.inviteCount / 5) * 100)}%` }}
-              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400"
-            />
-          </div>
-          <div className="flex items-center gap-3 text-white/30 italic text-[10px] font-medium">
-            <Gift size={14} className="text-emerald-500/40" />
-            &quot;5 invites unlocks Lifetime AI Vision processing.&quot;
-          </div>
+      {/* Milestone progress */}
+      <div style={{ paddingTop: 14, borderTop: '1px solid var(--fc-border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fc-sage)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Prossimo traguardo
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--fc-fresh)' }}>
+            {stats.inviteCount} / 5 inviti
+          </span>
+        </div>
+        <div
+          style={{
+            height: 7,
+            background: 'rgba(23,76,60,0.08)',
+            borderRadius: 999,
+            overflow: 'hidden',
+            marginBottom: 10,
+          }}
+        >
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            style={{
+              height: '100%',
+              background: 'linear-gradient(90deg, var(--fc-forest), var(--fc-fresh))',
+              borderRadius: 999,
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fc-sage)', fontWeight: 500 }}>
+          <Gift size={13} style={{ color: 'var(--fc-fresh)', flexShrink: 0 }} />
+          <span>Con 5 inviti sblocchi Fridge Vision AI illimitato.</span>
         </div>
       </div>
     </div>

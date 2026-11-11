@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { analyzeFridgeImage } from '@/lib/vision';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const rate = checkRateLimit(req, 'vision', 6, 60_000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: `Troppi tentativi. Riprova tra ${rate.retryAfterSeconds} secondi.` },
+        { status: 429 }
+      );
+    }
+
     const { image } = await req.json();
 
     if (!image) {
@@ -15,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ items });
   } catch (error: unknown) {
     console.error('Vision API Error:', error);
-    const message = error instanceof Error ? error.message : 'Errore durante l\'analisi dell\'immagine';
+    const message = error instanceof Error ? error.message : "Errore durante l'analisi dell'immagine";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
