@@ -2,50 +2,99 @@
 
 /* =========================================
    FRIGOCHEF 2.0 — Design System
-   Brand: Premium Natural Kitchen
+   Light & Dark Mode + Mobile-First SaaS
    ========================================= */
 
-:root {
-  /* --- Palette Brand --- */
-  --fc-forest:    #174C3C;   /* Forest Green — logo, header, accenti forti */
-  --fc-fresh:     #328567;   /* Fresh Green — CTA, pulsanti, stati positivi  */
-  --fc-sage:      #A8BDA5;   /* Sage — elementi secondari, dividers */
-  --fc-cream:     #F7F6EF;   /* Cream — sfondo principale */
-  --fc-lime:      #D9E9A3;   /* Lime — highlights, risparmi, freschi */
-  --fc-coral:     #E98B70;   /* Coral — avvisi, "usa presto" */
-  --fc-charcoal:  #252C28;   /* Charcoal — testo principale */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
 
-  /* --- Surface --- */
-  --fc-white:     #FFFFFF;
-  --fc-card:      #FFFFFF;
-  --fc-border:    rgba(23, 76, 60, 0.10);
-  --fc-border-md: rgba(23, 76, 60, 0.18);
-  --fc-shadow-sm: 0 1px 4px rgba(23, 76, 60, 0.06);
-  --fc-shadow-md: 0 4px 24px rgba(23, 76, 60, 0.10);
-  --fc-shadow-lg: 0 8px 48px rgba(23, 76, 60, 0.14);
+  /* --- Palette Brand (Light) --- */
+  --fc-forest:      #174C3C;   /* Titoli, accenti primari */
+  --fc-btn-bg:      #174C3C;   /* Sfondo pulsante primario */
+  --fc-btn-text:    #FFFFFF;   /* Testo pulsante primario */
+  --fc-fresh:       #2B7A5E;   /* CTA hover, stati positivi */
+  --fc-sage:        #647A6D;   /* Testi secondari, sottotitoli (alto contrasto) */
+  --fc-cream:       #F7F6EF;   /* Sfondo pagina principale */
+  --fc-surface:     #FFFFFF;   /* Sfondo card e superfici */
+  --fc-surface-alt: #F0EFE6;   /* Sfondo input secondari / box interni */
+  --fc-nav-bg:      rgba(247, 246, 239, 0.88);
+  --fc-lime:        #D9E9A3;   /* Evidenziazioni e badge */
+  --fc-coral:       #E06D53;   /* Avvisi e scadenze */
+  --fc-charcoal:    #1C2420;   /* Testo principale */
 
-  /* --- Semantic --- */
-  --background:   var(--fc-cream);
-  --foreground:   var(--fc-charcoal);
-  --card-bg:      var(--fc-card);
-  --accent:       var(--fc-fresh);
-  --accent-light: var(--fc-lime);
-  --danger:       var(--fc-coral);
-  --muted:        var(--fc-sage);
+  /* --- Surface & Borders --- */
+  --fc-white:       #FFFFFF;
+  --fc-card:        #FFFFFF;
+  --fc-border:      rgba(23, 76, 60, 0.12);
+  --fc-border-md:   rgba(23, 76, 60, 0.22);
+  --fc-shadow-sm:   0 2px 10px rgba(23, 76, 60, 0.05);
+  --fc-shadow-md:   0 8px 30px rgba(23, 76, 60, 0.09);
+  --fc-shadow-lg:   0 16px 48px rgba(23, 76, 60, 0.14);
 
   /* --- Radius --- */
-  --radius-sm:  10px;
+  --radius-sm:  12px;
   --radius-md:  16px;
   --radius-lg:  24px;
   --radius-xl:  32px;
   --radius-2xl: 40px;
 
   /* --- Typography --- */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Automatic Dark Mode via OS preference when no manual override is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --fc-forest:      #E6F4EE;
+    --fc-btn-bg:      #328567;
+    --fc-btn-text:    #FFFFFF;
+    --fc-fresh:       #4CC39A;
+    --fc-sage:        #96B0A3;
+    --fc-cream:       #0B1512;
+    --fc-surface:     #12211C;
+    --fc-surface-alt: #182C25;
+    --fc-nav-bg:      rgba(11, 21, 18, 0.88);
+    --fc-lime:        #D9E9A3;
+    --fc-coral:       #F08A70;
+    --fc-charcoal:    #ECF4F0;
+    --fc-white:       #12211C;
+    --fc-card:        #12211C;
+    --fc-border:      rgba(217, 233, 163, 0.12);
+    --fc-border-md:   rgba(217, 233, 163, 0.24);
+    --fc-shadow-sm:   0 2px 12px rgba(0, 0, 0, 0.35);
+    --fc-shadow-md:   0 10px 32px rgba(0, 0, 0, 0.45);
+    --fc-shadow-lg:   0 20px 56px rgba(0, 0, 0, 0.60);
+  }
+}
+
+/* Explicit Dark Mode override */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --fc-forest:      #E6F4EE;
+  --fc-btn-bg:      #328567;
+  --fc-btn-text:    #FFFFFF;
+  --fc-fresh:       #4CC39A;
+  --fc-sage:        #96B0A3;
+  --fc-cream:       #0B1512;
+  --fc-surface:     #12211C;
+  --fc-surface-alt: #182C25;
+  --fc-nav-bg:      rgba(11, 21, 18, 0.88);
+  --fc-lime:        #D9E9A3;
+  --fc-coral:       #F08A70;
+  --fc-charcoal:    #ECF4F0;
+  --fc-white:       #12211C;
+  --fc-card:        #12211C;
+  --fc-border:      rgba(217, 233, 163, 0.12);
+  --fc-border-md:   rgba(217, 233, 163, 0.24);
+  --fc-shadow-sm:   0 2px 12px rgba(0, 0, 0, 0.35);
+  --fc-shadow-md:   0 10px 32px rgba(0, 0, 0, 0.45);
+  --fc-shadow-lg:   0 20px 56px rgba(0, 0, 0, 0.60);
 }
 
 /* =========================================
-   BASE
+   BASE & RESET
    ========================================= */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -53,6 +102,7 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -62,224 +112,297 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
+  margin: 0;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* =========================================
-   TIPOGRAFIA
-   ========================================= */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-sans);
-  font-weight: 700;
-  color: var(--fc-charcoal);
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: var(--fc-forest);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+p {
+  margin: 0;
 }
 
 /* =========================================
-   UTILITY CLASSES
+   RESPONSIVE LAYOUT GRIDS (Mobile-First!)
    ========================================= */
+.fc-container {
+  max-width: 1160px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 24px 16px 104px;
+}
 
-/* Card standard */
+@media (min-width: 768px) {
+  .fc-container {
+    padding: 44px 28px 80px;
+  }
+}
+
+/* Dashboard 2-column grid on desktop, 1-column stack on mobile */
+.fc-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .fc-dashboard-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+    gap: 32px;
+  }
+}
+
+/* Generic 2-column grid (Fridge page, Modals) */
+.fc-two-col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 768px) {
+  .fc-two-col {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+}
+
+/* Recipe card body grid */
+.fc-recipe-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .fc-recipe-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
+  }
+}
+
+.fc-recipe-ingredients {
+  padding: 22px 20px;
+  border-bottom: 1px solid var(--fc-border);
+}
+
+@media (min-width: 768px) {
+  .fc-recipe-ingredients {
+    padding: 28px;
+    border-bottom: none;
+    border-right: 1px solid var(--fc-border);
+  }
+}
+
+/* Selectors 2-col on tablet+, 1-col on very narrow screens if needed */
+.fc-select-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 440px) {
+  .fc-select-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Nutrition 4-col on desktop, 2x2 on mobile */
+.fc-nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 540px) {
+  .fc-nutrition-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Social share modal grid */
+.fc-share-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .fc-share-grid {
+    grid-template-columns: 1fr 310px;
+  }
+}
+
+/* =========================================
+   COMPONENT CLASSES
+   ========================================= */
 .fc-card {
   background: var(--fc-card);
   border: 1px solid var(--fc-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--fc-shadow-sm);
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.2s ease;
 }
 
 .fc-card-hover {
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .fc-card-hover:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: var(--fc-shadow-md);
   border-color: var(--fc-border-md);
 }
 
-/* Badge freschezza */
-.fc-badge-fresh {
-  background: rgba(217, 233, 163, 0.5);
-  color: #2d5a1b;
-  border: 1px solid rgba(217, 233, 163, 0.8);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.fc-badge-soon {
-  background: rgba(233, 139, 112, 0.15);
-  color: #c0533a;
-  border: 1px solid rgba(233, 139, 112, 0.35);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.fc-badge-check {
-  background: rgba(168, 189, 165, 0.25);
-  color: #4a6349;
-  border: 1px solid rgba(168, 189, 165, 0.5);
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-/* Pulsante primario */
 .fc-btn-primary {
-  background: var(--fc-forest);
-  color: #fff;
+  background: var(--fc-btn-bg);
+  color: var(--fc-btn-text);
   font-weight: 700;
   border-radius: var(--radius-md);
-  padding: 12px 28px;
+  padding: 13px 24px;
   border: none;
   cursor: pointer;
   font-size: 15px;
   letter-spacing: -0.01em;
-  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-  box-shadow: 0 2px 12px rgba(23, 76, 60, 0.25);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(23, 76, 60, 0.22);
 }
 .fc-btn-primary:hover {
-  background: var(--fc-fresh);
+  filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(50, 133, 103, 0.35);
 }
 .fc-btn-primary:active {
   transform: translateY(0);
 }
 
-/* Pulsante secondario */
 .fc-btn-secondary {
-  background: transparent;
+  background: var(--fc-surface);
   color: var(--fc-forest);
   font-weight: 700;
   border-radius: var(--radius-md);
-  padding: 11px 24px;
+  padding: 12px 20px;
   border: 1.5px solid var(--fc-border-md);
   cursor: pointer;
   font-size: 14px;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 .fc-btn-secondary:hover {
-  background: rgba(23, 76, 60, 0.05);
+  background: var(--fc-surface-alt);
   border-color: var(--fc-fresh);
 }
 
-/* Chip ingrediente */
 .fc-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(50, 133, 103, 0.10);
+  background: rgba(50, 133, 103, 0.14);
   color: var(--fc-fresh);
-  border: 1px solid rgba(50, 133, 103, 0.22);
+  border: 1px solid rgba(50, 133, 103, 0.28);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 6px 13px;
   font-size: 13px;
   font-weight: 600;
-  transition: background 0.15s ease;
-}
-.fc-chip:hover {
-  background: rgba(50, 133, 103, 0.18);
 }
 
-/* Label sezione */
+.fc-quick-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--fc-surface-alt);
+  color: var(--fc-charcoal);
+  border: 1px solid var(--fc-border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.fc-quick-pill:hover {
+  border-color: var(--fc-fresh);
+  color: var(--fc-fresh);
+  transform: translateY(-1px);
+}
+
 .fc-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--fc-sage);
 }
 
-/* Sezione hero stat */
 .fc-stat-card {
   background: var(--fc-card);
   border: 1px solid var(--fc-border);
   border-radius: var(--radius-md);
-  padding: 20px 24px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   box-shadow: var(--fc-shadow-sm);
-  transition: box-shadow 0.2s, transform 0.2s;
-}
-.fc-stat-card:hover {
-  box-shadow: var(--fc-shadow-md);
-  transform: translateY(-2px);
 }
 
-/* Input premium */
 .fc-input {
   width: 100%;
-  background: var(--fc-card);
+  background: var(--fc-surface-alt);
   border: 1.5px solid var(--fc-border);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 12px 15px;
   font-size: 14px;
   font-family: var(--font-sans);
   color: var(--fc-charcoal);
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 .fc-input:focus {
+  background: var(--fc-surface);
   border-color: var(--fc-fresh);
-  box-shadow: 0 0 0 3px rgba(50, 133, 103, 0.12);
+  box-shadow: 0 0 0 3px rgba(50, 133, 103, 0.16);
 }
 .fc-input::placeholder {
   color: var(--fc-sage);
 }
 
-/* =========================================
-   SCROLLBAR
-   ========================================= */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Mobile bottom bar */
+.fc-mobile-nav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--fc-nav-bg);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid var(--fc-border);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  justify-content: space-around;
+  align-items: center;
 }
-::-webkit-scrollbar-track {
-  background: var(--fc-cream);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--fc-sage);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--fc-forest);
+
+@media (min-width: 768px) {
+  .fc-mobile-nav {
+    display: none;
+  }
 }
 
 /* =========================================
    ANIMAZIONI
    ========================================= */
 @keyframes fc-fade-up {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fc-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
 }
 @keyframes fc-pulse-dot {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
 }
 
-.fc-animate-up  { animation: fc-fade-up  0.5s ease both; }
-.fc-animate-in  { animation: fc-fade-in  0.4s ease both; }
-.fc-pulse-dot   { animation: fc-pulse-dot 2s infinite; }
-
-/* Stagger utility */
-.fc-delay-1 { animation-delay: 0.05s; }
-.fc-delay-2 { animation-delay: 0.10s; }
-.fc-delay-3 { animation-delay: 0.15s; }
-.fc-delay-4 { animation-delay: 0.20s; }
-.fc-delay-5 { animation-delay: 0.25s; }
-
-/* =========================================
-   TRANSIZIONI GLOBALI (selettive)
-   ========================================= */
-a, button {
-  transition: color 0.15s ease, background 0.15s ease,
-              border-color 0.15s ease, box-shadow 0.15s ease,
-              transform 0.15s ease, opacity 0.15s ease;
-}
+.fc-animate-up { animation: fc-fade-up 0.45s ease both; }
+.fc-pulse-dot  { animation: fc-pulse-dot 2s infinite; }

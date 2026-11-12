@@ -174,13 +174,11 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             {/* Valori nutrizionali */}
             {recipe.nutrizione && (
               <div
+                className="fc-nutrition-grid"
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: 8,
-                  marginTop: 24,
+                  marginTop: 22,
                   padding: '16px',
-                  background: '#fff',
+                  background: 'var(--fc-surface)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--fc-border)',
                 }}
@@ -204,18 +202,11 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         </div>
 
         {/* ── CORPO: INGREDIENTI + PASSAGGI ── */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.6fr)',
-          }}
-          className="max-md:grid-cols-1"
-        >
+        <div className="fc-recipe-grid">
           {/* Ingredienti */}
           <div
+            className="fc-recipe-ingredients"
             style={{
-              padding: '28px 28px',
-              borderRight: '1px solid var(--fc-border)',
               display: 'flex',
               flexDirection: 'column',
               gap: 16,

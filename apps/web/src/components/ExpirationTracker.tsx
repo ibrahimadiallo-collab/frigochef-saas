@@ -121,7 +121,7 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(columns.length, 3)}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: 12,
         }}
       >
@@ -164,7 +164,7 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.07 }}
                   style={{
-                    background: '#fff',
+                    background: 'var(--fc-surface)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '10px 12px',
                     display: 'flex',

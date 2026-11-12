@@ -75,7 +75,7 @@ export default function FridgePage() {
     <main style={{ minHeight: '100vh', background: 'var(--fc-cream)' }}>
       <Navbar />
 
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '40px 24px 80px', display: 'flex', flexDirection: 'column', gap: 36 }}>
+      <div className="fc-container" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
         {/* Header */}
         <motion.div
@@ -89,9 +89,9 @@ export default function FridgePage() {
               <div
                 style={{
                   width: 40, height: 40, borderRadius: 12,
-                  background: 'rgba(23,76,60,0.1)',
+                  background: 'rgba(50,133,103,0.12)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--fc-forest)',
+                  color: 'var(--fc-fresh)',
                 }}
               >
                 <Refrigerator size={20} />
@@ -110,7 +110,7 @@ export default function FridgePage() {
             <div
               style={{
                 padding: '10px 16px',
-                background: '#fff',
+                background: 'var(--fc-surface)',
                 border: '1px solid var(--fc-border)',
                 borderRadius: 'var(--radius-md)',
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -142,11 +142,8 @@ export default function FridgePage() {
           </div>
         </motion.div>
 
-        {/* Layout 2 colonne */}
-        <div
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}
-          className="max-md:grid-cols-1"
-        >
+        {/* Layout 2 colonne responsive */}
+        <div className="fc-two-col">
           {/* Sinistra: Input + categorie */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
@@ -259,7 +256,7 @@ export default function FridgePage() {
                 <div
                   style={{
                     padding: '14px',
-                    background: '#fff',
+                    background: 'var(--fc-surface)',
                     borderRadius: 'var(--radius-sm)',
                     display: 'flex',
                     flexDirection: 'column',

@@ -117,15 +117,13 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
             initial={{ opacity: 0, scale: 0.94, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 16 }}
-            className="fc-card"
+            className="fc-card fc-share-grid"
             style={{
               position: 'relative',
               zIndex: 10,
               width: '100%',
               maxWidth: 820,
               overflow: 'hidden',
-              display: 'grid',
-              gridTemplateColumns: '1fr 300px',
             }}
           >
             {/* Preview Section */}
@@ -273,7 +271,7 @@ export default function SocialShare({ recipe, isOpen, onClose }: SocialShareProp
             </div>
 
             {/* Controls Section */}
-            <div style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#fff' }}>
+            <div style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'var(--fc-surface)' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                   <div>

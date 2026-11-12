@@ -96,6 +96,19 @@ const createSafeSupabaseClient = () => {
           };
         }
       },
+      signInWithOAuth: async (params: { provider: 'google'; options?: any }) => {
+        if (!realClient) {
+          return { data: { provider: 'google', url: null }, error: { message: 'Supabase non configurato' } };
+        }
+        try {
+          return await realClient.auth.signInWithOAuth(params);
+        } catch {
+          return {
+            data: { provider: 'google', url: null },
+            error: { message: 'Impossibile connettersi a Google OAuth.' },
+          };
+        }
+      },
       signInDemo: (email: string) => {
         const demoUser = {
           id: 'demo-user-id',

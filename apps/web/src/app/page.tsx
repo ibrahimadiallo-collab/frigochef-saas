@@ -9,7 +9,7 @@ import ReferralDashboard from '@/components/ReferralDashboard';
 import MealPlanner from '@/components/MealPlanner';
 import {
   Sparkles, Loader2, ArrowRight, ChefHat, Calendar,
-  Refrigerator, Clock, Flame, Leaf, TrendingUp,
+  Refrigerator, Flame, TrendingUp, Star, CheckCircle2, Camera, Utensils
 } from 'lucide-react';
 import { authHeader } from '@/lib/supabase';
 import { Recipe, MealPlan } from '@/lib/ai';
@@ -41,17 +41,17 @@ function StatCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: accent ? `${accent}18` : 'rgba(23,76,60,0.08)',
-          color: accent || 'var(--fc-forest)',
+          background: accent ? `${accent}18` : 'rgba(50,133,103,0.12)',
+          color: accent || 'var(--fc-fresh)',
           marginBottom: 4,
         }}
       >
         {icon}
       </div>
-      <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--fc-charcoal)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+      <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--fc-charcoal)', letterSpacing: '-0.03em', lineHeight: 1 }}>
         {value}
       </span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-charcoal)', opacity: 0.8 }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fc-charcoal)', opacity: 0.85 }}>
         {label}
       </span>
       {sublabel && (
@@ -106,14 +106,14 @@ export default function Home() {
         console.error('Impossibile salvare la dispensa:', err);
       }
     };
-    const id = setTimeout(save, 1000);
+    const id = setTimeout(save, 800);
     return () => clearTimeout(id);
   }, [tags, isPantryLoading]);
 
   /* ── Genera ricetta ── */
   const handleGenerate = async () => {
     if (tags.length < 2) {
-      setError('Aggiungi almeno 2 ingredienti per iniziare.');
+      setError('Aggiungi almeno 2 ingredienti (o toccali dai suggerimenti rapidi) per iniziare.');
       return;
     }
     setIsLoading(true);
@@ -140,7 +140,7 @@ export default function Home() {
   /* ── Genera piano pasti ── */
   const handlePlanGenerate = async () => {
     if (tags.length < 2) {
-      setError('Aggiungi qualche ingrediente per pianificare la settimana.');
+      setError('Aggiungi almeno 2 ingredienti per pianificare la settimana.');
       return;
     }
     setIsPlanLoading(true);
@@ -163,7 +163,6 @@ export default function Home() {
     }
   };
 
-  /* ── Dati per la stat cards ── */
   const urgentItems = expiryItems.filter((i) => i.daysRemaining <= 2);
   const availableRecipes = tags.length >= 2 ? Math.min(tags.length * 3, 24) : 0;
 
@@ -179,62 +178,83 @@ export default function Home() {
     >
       <Navbar />
 
-      <div
-        style={{
-          maxWidth: 1120,
-          margin: '0 auto',
-          width: '100%',
-          padding: '48px 24px 80px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 48,
-        }}
-      >
+      <div className="fc-container" style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
         {/* ════════════════════════════════════
-            HERO — Greeting + Stat Cards
+            HERO — Social Proof + Headline + Value Props
         ════════════════════════════════════ */}
         <section>
-          {/* Greeting */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{ marginBottom: 32 }}
+            transition={{ duration: 0.45 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           >
+            {/* Social Proof Pill */}
             <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '5px 14px',
+                gap: 8,
+                padding: '6px 14px',
                 borderRadius: 999,
-                background: 'rgba(217,233,163,0.5)',
-                border: '1px solid rgba(217,233,163,0.9)',
-                marginBottom: 16,
+                background: 'rgba(50,133,103,0.12)',
+                border: '1px solid rgba(50,133,103,0.28)',
+                alignSelf: 'flex-start',
               }}
             >
-              <Leaf size={12} style={{ color: 'var(--fc-forest)' }} />
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                La tua cucina intelligente
+              <div style={{ display: 'flex', color: '#E6A100' }}>
+                <Star size={12} fill="currentColor" />
+                <Star size={12} fill="currentColor" />
+                <Star size={12} fill="currentColor" />
+                <Star size={12} fill="currentColor" />
+                <Star size={12} fill="currentColor" />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '0.02em' }}>
+                4.9/5 • Oltre 2.400 cucine smart in Italia
               </span>
             </div>
 
             <h1
               style={{
-                fontSize: 'clamp(28px, 5vw, 48px)',
+                fontSize: 'clamp(30px, 6vw, 52px)',
                 fontWeight: 800,
                 color: 'var(--fc-forest)',
-                letterSpacing: '-0.03em',
-                lineHeight: 1.1,
-                marginBottom: 10,
+                letterSpacing: '-0.035em',
+                lineHeight: 1.08,
+                maxWidth: 680,
               }}
             >
-              Cosa cuciniamo oggi?
+              Trasforma ciò che hai in frigo nel tuo prossimo piatto.
             </h1>
-            <p style={{ fontSize: 16, color: 'var(--fc-sage)', fontWeight: 500, maxWidth: 480 }}>
-              Aggiungi gli ingredienti del tuo frigo e lascia che l'AI crei ricette perfette
-              per te — riducendo gli sprechi e rispettando i tuoi gusti.
+
+            <p style={{ fontSize: 16, color: 'var(--fc-sage)', fontWeight: 500, maxWidth: 560, lineHeight: 1.55 }}>
+              Scatta una foto al frigorifero o seleziona gli ingredienti disponibili: il nostro
+              Chef AI crea ricette su misura, calcola le calorie e azzera gli sprechi.
             </p>
+
+            {/* Value Badges */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, paddingTop: 4 }}>
+              {[
+                'Ricette pronte in 5 secondi',
+                'Valori nutrizionali inclusi',
+                'Fino a 120 €/mese risparmiati',
+              ].map((badge) => (
+                <div
+                  key={badge}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--fc-charcoal)',
+                  }}
+                >
+                  <CheckCircle2 size={14} style={{ color: 'var(--fc-fresh)', flexShrink: 0 }} />
+                  <span>{badge}</span>
+                </div>
+              ))}
+            </div>
           </motion.div>
 
           {/* Stat Cards */}
@@ -242,9 +262,9 @@ export default function Home() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))',
                 gap: 12,
-                marginBottom: 8,
+                marginTop: 24,
               }}
             >
               <StatCard
@@ -271,7 +291,7 @@ export default function Home() {
                   value={`~${availableRecipes}`}
                   sublabel="con i tuoi ingredienti"
                   accent="var(--fc-fresh)"
-                  delay={0.10}
+                  delay={0.1}
                 />
               )}
               {mealPlan && (
@@ -289,40 +309,53 @@ export default function Home() {
         </section>
 
         {/* ════════════════════════════════════
-            LAYOUT PRINCIPALE — 2 colonne
+            LAYOUT PRINCIPALE — Responsive Grid
         ════════════════════════════════════ */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.7fr)',
-            gap: 32,
-            alignItems: 'start',
-          }}
-          className="max-lg:grid-cols-1"
-        >
+        <div className="fc-dashboard-grid">
           {/* ── COLONNA SINISTRA: Input + Risultati ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* Card generatore ricette */}
-            <div className="fc-card" style={{ padding: '28px' }}>
-              <h2
+            <div className="fc-card" style={{ padding: '24px 20px' }}>
+              <div
                 style={{
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: 'var(--fc-forest)',
-                  marginBottom: 20,
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 18,
+                  flexWrap: 'wrap',
                   gap: 8,
                 }}
               >
-                <Sparkles size={18} style={{ color: 'var(--fc-lime)' }} />
-                Genera una Ricetta
-              </h2>
+                <h2
+                  style={{
+                    fontSize: 19,
+                    fontWeight: 800,
+                    color: 'var(--fc-forest)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Sparkles size={19} style={{ color: 'var(--fc-fresh)' }} />
+                  Crea la tua Ricetta con l&apos;AI
+                </h2>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: 999,
+                    background: 'rgba(50,133,103,0.12)',
+                    color: 'var(--fc-fresh)',
+                  }}
+                >
+                  Gemini 2.0 Flash
+                </span>
+              </div>
 
               {/* Input ingredienti */}
               {isPantryLoading ? (
-                <div style={{ height: 130, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Loader2 className="animate-spin" size={24} style={{ color: 'var(--fc-sage)' }} />
                 </div>
               ) : (
@@ -334,7 +367,7 @@ export default function Home() {
               )}
 
               {/* Selettori tipo pasto + tempo */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+              <div className="fc-select-grid" style={{ marginTop: 18 }}>
                 <div>
                   <label
                     htmlFor="meal-type-select"
@@ -350,10 +383,10 @@ export default function Home() {
                     className="fc-input"
                     style={{ cursor: 'pointer' }}
                   >
-                    <option value="colazione">Colazione</option>
-                    <option value="pranzo">Pranzo</option>
-                    <option value="cena">Cena</option>
-                    <option value="qualsiasi">Qualsiasi</option>
+                    <option value="colazione">🌅 Colazione</option>
+                    <option value="pranzo">☀️ Pranzo</option>
+                    <option value="cena">🌙 Cena</option>
+                    <option value="qualsiasi">✨ Qualsiasi</option>
                   </select>
                 </div>
                 <div>
@@ -371,9 +404,9 @@ export default function Home() {
                     className="fc-input"
                     style={{ cursor: 'pointer' }}
                   >
-                    <option value="veloce">Veloce (15 min)</option>
-                    <option value="normale">Standard (30 min)</option>
-                    <option value="lento">Con calma (1h+)</option>
+                    <option value="veloce">⚡ Veloce (15 min)</option>
+                    <option value="normale">⏱️ Standard (30 min)</option>
+                    <option value="lento">🍲 Con calma (1h+)</option>
                   </select>
                 </div>
               </div>
@@ -386,10 +419,10 @@ export default function Home() {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     style={{
-                      marginTop: 12,
+                      marginTop: 14,
                       padding: '12px 16px',
-                      background: 'rgba(233,139,112,0.1)',
-                      border: '1px solid rgba(233,139,112,0.3)',
+                      background: 'rgba(224,109,83,0.12)',
+                      border: '1px solid rgba(224,109,83,0.35)',
                       borderRadius: 'var(--radius-sm)',
                       fontSize: 13,
                       fontWeight: 600,
@@ -422,12 +455,12 @@ export default function Home() {
                   {isLoading ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      L'AI sta creando la ricetta…
+                      Lo Chef AI sta creando la ricetta…
                     </>
                   ) : (
                     <>
                       <Sparkles size={18} />
-                      Genera Ricetta
+                      Genera Ricetta Ora
                       <ArrowRight size={16} />
                     </>
                   )}
@@ -452,59 +485,17 @@ export default function Home() {
                   {isPlanLoading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Generazione piano in corso…
+                      Pianificazione settimanale…
                     </>
                   ) : (
                     <>
                       <Calendar size={16} />
-                      Genera Piano Settimanale
+                      Genera Piano Pasti di 7 Giorni
                     </>
                   )}
                 </button>
               </div>
             </div>
-
-            {/* Placeholder vuoto prima dei risultati */}
-            {!recipe && !mealPlan && !isLoading && !isPlanLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="fc-card"
-                style={{
-                  padding: '48px 32px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  gap: 16,
-                  background: 'linear-gradient(135deg, rgba(23,76,60,0.03) 0%, rgba(217,233,163,0.08) 100%)',
-                }}
-              >
-                <div
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 24,
-                    background: 'rgba(23,76,60,0.07)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--fc-sage)',
-                  }}
-                >
-                  <ChefHat size={36} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--fc-forest)', marginBottom: 6 }}>
-                    La tua cucina ti aspetta
-                  </h3>
-                  <p style={{ fontSize: 14, color: 'var(--fc-sage)', maxWidth: 300, lineHeight: 1.6 }}>
-                    Aggiungi gli ingredienti che hai in casa e l'AI creerà una ricetta su misura per te.
-                  </p>
-                </div>
-              </motion.div>
-            )}
 
             {/* Ricetta generata */}
             <AnimatePresence>
@@ -515,20 +506,82 @@ export default function Home() {
             <AnimatePresence>
               {mealPlan && <MealPlanner plan={mealPlan} />}
             </AnimatePresence>
+
+            {/* Sezione "Come funziona" (visibile quando non c'è ancora una ricetta) */}
+            {!recipe && !mealPlan && !isLoading && !isPlanLoading && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: 14,
+                }}
+              >
+                {[
+                  {
+                    step: '01',
+                    icon: <Camera size={20} />,
+                    title: 'Scansiona o inserisci',
+                    desc: 'Fotografa il frigo o tocca gli ingredienti che hai già in casa.',
+                  },
+                  {
+                    step: '02',
+                    icon: <Sparkles size={20} />,
+                    title: 'Ricetta su misura',
+                    desc: "L'AI combina i sapori migliori e dà priorità ai cibi in scadenza.",
+                  },
+                  {
+                    step: '03',
+                    icon: <Utensils size={20} />,
+                    title: 'Cucina passo-passo',
+                    desc: 'Segui la Modalità Cucina con timer integrato e valori nutrizionali.',
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className="fc-card"
+                    style={{
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: 12,
+                          background: 'rgba(50,133,103,0.12)',
+                          color: 'var(--fc-fresh)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {item.icon}
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--fc-sage)', opacity: 0.6 }}>
+                        PASSO {item.step}
+                      </span>
+                    </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--fc-forest)' }}>
+                      {item.title}
+                    </h3>
+                    <p style={{ fontSize: 13, color: 'var(--fc-sage)', lineHeight: 1.5 }}>
+                      {item.desc}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── COLONNA DESTRA: Radar + Pro + Referral ── */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 20,
-            }}
-            className="lg:sticky lg:top-24"
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Freshness Radar */}
             {expiryItems.length > 0 && (
-              <div className="fc-card" style={{ padding: '24px' }}>
+              <div className="fc-card" style={{ padding: '22px 20px' }}>
                 <ExpirationTracker
                   items={expiryItems}
                   onFindRecipe={(ingredient) => {
@@ -539,31 +592,27 @@ export default function Home() {
               </div>
             )}
 
-            {/* Referral */}
-            <ReferralDashboard />
-
             {/* Card Pro */}
             <div
               id="pricing"
               className="fc-card"
               style={{
-                padding: '24px',
-                background: 'linear-gradient(135deg, var(--fc-forest) 0%, #245e4a 100%)',
+                padding: '26px 24px',
+                background: 'linear-gradient(135deg, #174C3C 0%, #24634D 100%)',
                 border: 'none',
                 position: 'relative',
                 overflow: 'hidden',
               }}
             >
-              {/* Decorativo */}
               <div
                 style={{
                   position: 'absolute',
                   top: -30,
                   right: -30,
-                  width: 120,
-                  height: 120,
+                  width: 130,
+                  height: 130,
                   borderRadius: '50%',
-                  background: 'rgba(217,233,163,0.08)',
+                  background: 'rgba(217,233,163,0.10)',
                 }}
               />
               <div style={{ position: 'relative', zIndex: 1 }}>
@@ -572,31 +621,31 @@ export default function Home() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 5,
-                    padding: '4px 10px',
+                    padding: '4px 11px',
                     borderRadius: 999,
                     background: 'rgba(217,233,163,0.2)',
                     marginBottom: 14,
                   }}
                 >
-                  <TrendingUp size={11} style={{ color: 'var(--fc-lime)' }} />
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--fc-lime)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                  <TrendingUp size={11} style={{ color: '#D9E9A3' }} />
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#D9E9A3', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                     Offerta Lancio
                   </span>
                 </div>
 
-                <h3 style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginBottom: 8 }}>
+                <h3 style={{ fontSize: 21, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em', marginBottom: 8 }}>
                   Passa a FrigoChef Pro
                 </h3>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.6, marginBottom: 20 }}>
-                  Scansioni illimitate, piano alimentare avanzato, account famiglia e molto altro.
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, marginBottom: 18 }}>
+                  Scansioni AI illimitate del frigo, piano alimentare settimanale completo, calcolo macro e account famiglia.
                 </p>
 
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginBottom: 20 }}>
-                  <span style={{ fontSize: 36, fontWeight: 900, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                    €5,99
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
+                  <span style={{ fontSize: 34, fontWeight: 900, color: '#FFFFFF', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                    5,99 €
                   </span>
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>
-                    /mese
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
+                    / mese • disdici quando vuoi
                   </span>
                 </div>
 
@@ -612,24 +661,23 @@ export default function Home() {
                   }}
                   style={{
                     width: '100%',
-                    padding: '14px',
-                    background: 'var(--fc-lime)',
-                    color: 'var(--fc-forest)',
+                    padding: '14px 18px',
+                    background: '#D9E9A3',
+                    color: '#174C3C',
                     fontWeight: 800,
                     fontSize: 14,
                     borderRadius: 'var(--radius-md)',
                     border: 'none',
                     cursor: 'pointer',
-                    letterSpacing: '-0.01em',
-                    transition: 'opacity 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                 >
-                  Passa a Pro Ora
+                  Attiva Prova Pro Ora →
                 </button>
               </div>
             </div>
+
+            {/* Referral */}
+            <ReferralDashboard />
           </div>
         </div>
       </div>
@@ -638,14 +686,14 @@ export default function Home() {
       <footer
         style={{
           borderTop: '1px solid var(--fc-border)',
-          padding: '28px 24px',
-          background: '#fff',
+          padding: '28px 20px 96px',
+          background: 'var(--fc-surface)',
           marginTop: 'auto',
         }}
       >
         <div
           style={{
-            maxWidth: 1120,
+            maxWidth: 1160,
             margin: '0 auto',
             display: 'flex',
             flexWrap: 'wrap',
@@ -654,20 +702,20 @@ export default function Home() {
             gap: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--fc-forest)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--fc-forest)' }}>
               FrigoChef
             </span>
-            <span style={{ fontSize: 12, color: 'var(--fc-sage)' }}>© 2025 · La tua cucina, più intelligente.</span>
+            <span style={{ fontSize: 12, color: 'var(--fc-sage)' }}>
+              © 2026 · La tua cucina, più intelligente.
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 20 }}>
             {['Privacy', 'Termini', 'Contatti'].map((link) => (
               <a
                 key={link}
                 href="#"
-                style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 500, textDecoration: 'none' }}
-                onMouseEnter={(e) => ((e.target as HTMLAnchorElement).style.color = 'var(--fc-fresh)')}
-                onMouseLeave={(e) => ((e.target as HTMLAnchorElement).style.color = 'var(--fc-sage)')}
+                style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}
               >
                 {link}
               </a>

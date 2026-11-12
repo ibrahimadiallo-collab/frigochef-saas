@@ -68,7 +68,7 @@ export default function PlannerPage() {
     <main style={{ minHeight: '100vh', background: 'var(--fc-cream)' }}>
       <Navbar />
 
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '40px 24px 80px', display: 'flex', flexDirection: 'column', gap: 36 }}>
+      <div className="fc-container" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
         {/* Header */}
         <motion.div
@@ -143,7 +143,7 @@ export default function PlannerPage() {
               display: 'flex',
               alignItems: 'center',
               padding: '14px 20px',
-              background: '#fff',
+              background: 'var(--fc-surface)',
               border: '1px solid var(--fc-border)',
               borderRadius: 'var(--radius-md)',
               flexWrap: 'wrap',
