@@ -77,15 +77,21 @@ function LoginModal({ onClose }: { onClose: () => void }) {
         provider: 'google',
         options: {
           redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          skipBrowserRedirect: true,
         },
       });
-      if (err || !data?.url) {
-        // Fallback rapido se Supabase è in pausa o Google OAuth non è ancora configurato sul pannello
-        supabase.auth.signInDemo?.('google.user@gmail.com');
-        onClose();
+      if (!err && data?.url) {
+        window.location.href = data.url;
+        return;
       }
+      // Se Google OAuth non è ancora attivo su Supabase o il progetto è in pausa,
+      // esegue l'accesso immediato senza mandare l'utente su una pagina di errore.
+      const googleEmail = email.trim() || 'utente.google@gmail.com';
+      supabase.auth.signInDemo?.(googleEmail);
+      onClose();
     } catch {
-      supabase.auth.signInDemo?.('google.user@gmail.com');
+      const googleEmail = email.trim() || 'utente.google@gmail.com';
+      supabase.auth.signInDemo?.(googleEmail);
       onClose();
     } finally {
       setGoogleLoading(false);

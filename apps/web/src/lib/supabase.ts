@@ -97,11 +97,35 @@ const createSafeSupabaseClient = () => {
         }
       },
       signInWithOAuth: async (params: { provider: 'google'; options?: any }) => {
-        if (!realClient) {
+        if (!realClient || !supabaseUrl || !supabaseAnonKey) {
           return { data: { provider: 'google', url: null }, error: { message: 'Supabase non configurato' } };
         }
         try {
-          return await realClient.auth.signInWithOAuth(params);
+          // Verifica preventiva: controlla se Supabase è raggiungibile e se il provider Google è attivo
+          const settingsRes = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+            headers: { apikey: supabaseAnonKey },
+          });
+          if (!settingsRes.ok) {
+            return {
+              data: { provider: 'google', url: null },
+              error: { message: 'Supabase non raggiungibile o in pausa.' },
+            };
+          }
+          const settings = await settingsRes.json();
+          if (!settings?.external?.google) {
+            return {
+              data: { provider: 'google', url: null },
+              error: { message: 'Provider Google non ancora attivo su Supabase.' },
+            };
+          }
+
+          return await realClient.auth.signInWithOAuth({
+            ...params,
+            options: {
+              ...params.options,
+              skipBrowserRedirect: true,
+            },
+          });
         } catch {
           return {
             data: { provider: 'google', url: null },
