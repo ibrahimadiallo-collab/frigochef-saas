@@ -94,35 +94,40 @@ export default function ReferralDashboard() {
         <label className="fc-label" style={{ display: 'block', marginBottom: 6 }}>
           Il tuo link personale
         </label>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div
             style={{
               flex: 1,
-              background: 'var(--fc-cream)',
+              height: 44,
+              background: 'var(--fc-surface-alt)',
               border: '1.5px solid var(--fc-border)',
               borderRadius: 'var(--radius-sm)',
-              padding: '10px 12px',
+              padding: '0 12px',
               fontSize: 12,
               fontFamily: 'monospace',
               color: 'var(--fc-charcoal)',
+              display: 'flex',
+              alignItems: 'center',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
-            frigochef.it?ref={stats.referralCode}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              frigochef.it?ref={stats.referralCode}
+            </span>
           </div>
           <button
             onClick={copyLink}
             title="Copia link"
             style={{
-              width: 42,
-              height: 42,
+              width: 44,
+              height: 44,
               borderRadius: 'var(--radius-sm)',
               border: 'none',
-              background: copied ? 'var(--fc-fresh)' : 'var(--fc-forest)',
+              background: copied ? 'var(--fc-fresh)' : 'var(--fc-btn-bg)',
               color: '#fff',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',

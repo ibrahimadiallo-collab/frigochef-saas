@@ -103,14 +103,17 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
           style={{
             display: 'inline-flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 6,
+            height: 32,
+            padding: '0 14px',
             fontSize: 12,
             fontWeight: 700,
+            lineHeight: 1,
             color: 'var(--fc-fresh)',
             background: 'rgba(50,133,103,0.12)',
             border: '1px solid rgba(50,133,103,0.28)',
             borderRadius: 999,
-            padding: '6px 14px',
             cursor: 'pointer',
             opacity: isAnalyzing ? 0.6 : 1,
           }}
@@ -118,12 +121,12 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
           {isAnalyzing ? (
             <>
               <Loader2 size={13} className="animate-spin" />
-              Analisi foto…
+              <span>Analisi foto…</span>
             </>
           ) : (
             <>
               <Camera size={13} />
-              Scansiona il frigo con AI
+              <span>Scansiona il frigo con AI</span>
             </>
           )}
         </button>

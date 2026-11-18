@@ -18,7 +18,7 @@
   --fc-cream:       #F7F6EF;   /* Sfondo pagina principale */
   --fc-surface:     #FFFFFF;   /* Sfondo card e superfici */
   --fc-surface-alt: #F0EFE6;   /* Sfondo input secondari / box interni */
-  --fc-nav-bg:      rgba(247, 246, 239, 0.88);
+  --fc-nav-bg:      rgba(247, 246, 239, 0.90);
   --fc-lime:        #D9E9A3;   /* Evidenziazioni e badge */
   --fc-coral:       #E06D53;   /* Avvisi e scadenze */
   --fc-charcoal:    #1C2420;   /* Testo principale */
@@ -34,7 +34,7 @@
 
   /* --- Radius --- */
   --radius-sm:  12px;
-  --radius-md:  16px;
+  --radius-md:  14px;
   --radius-lg:  24px;
   --radius-xl:  32px;
   --radius-2xl: 40px;
@@ -55,7 +55,7 @@
     --fc-cream:       #0B1512;
     --fc-surface:     #12211C;
     --fc-surface-alt: #182C25;
-    --fc-nav-bg:      rgba(11, 21, 18, 0.88);
+    --fc-nav-bg:      rgba(11, 21, 18, 0.90);
     --fc-lime:        #D9E9A3;
     --fc-coral:       #F08A70;
     --fc-charcoal:    #ECF4F0;
@@ -80,7 +80,7 @@
   --fc-cream:       #0B1512;
   --fc-surface:     #12211C;
   --fc-surface-alt: #182C25;
-  --fc-nav-bg:      rgba(11, 21, 18, 0.88);
+  --fc-nav-bg:      rgba(11, 21, 18, 0.90);
   --fc-lime:        #D9E9A3;
   --fc-coral:       #F08A70;
   --fc-charcoal:    #ECF4F0;
@@ -111,7 +111,7 @@ body {
   color: var(--fc-charcoal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
+  line-height: 1.5;
   margin: 0;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -127,6 +127,13 @@ h1, h2, h3, h4, h5, h6 {
 
 p {
   margin: 0;
+}
+
+/* Allinea perfettamente le icone SVG dentro pulsanti e link */
+button svg,
+a svg {
+  flex-shrink: 0;
+  display: block;
 }
 
 /* =========================================
@@ -145,7 +152,6 @@ p {
   }
 }
 
-/* Dashboard 2-column grid on desktop, 1-column stack on mobile */
 .fc-dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -160,7 +166,6 @@ p {
   }
 }
 
-/* Generic 2-column grid (Fridge page, Modals) */
 .fc-two-col {
   display: grid;
   grid-template-columns: 1fr;
@@ -175,7 +180,6 @@ p {
   }
 }
 
-/* Recipe card body grid */
 .fc-recipe-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -200,7 +204,6 @@ p {
   }
 }
 
-/* Selectors 2-col on tablet+, 1-col on very narrow screens if needed */
 .fc-select-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -213,7 +216,6 @@ p {
   }
 }
 
-/* Nutrition 4-col on desktop, 2x2 on mobile */
 .fc-nutrition-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -226,7 +228,6 @@ p {
   }
 }
 
-/* Social share modal grid */
 .fc-share-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -241,7 +242,7 @@ p {
 }
 
 /* =========================================
-   COMPONENT CLASSES
+   COMPONENT CLASSES (Allineamento Geometrico)
    ========================================= */
 .fc-card {
   background: var(--fc-card);
@@ -260,16 +261,25 @@ p {
   border-color: var(--fc-border-md);
 }
 
+/* Pulsanti primari e secondari: altezza, centratura e line-height identici */
 .fc-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 22px;
   background: var(--fc-btn-bg);
   color: var(--fc-btn-text);
+  font-family: var(--font-sans);
   font-weight: 700;
-  border-radius: var(--radius-md);
-  padding: 13px 24px;
-  border: none;
-  cursor: pointer;
   font-size: 15px;
+  line-height: 1.15;
   letter-spacing: -0.01em;
+  text-align: center;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 14px rgba(23, 76, 60, 0.22);
 }
@@ -282,14 +292,22 @@ p {
 }
 
 .fc-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
   background: var(--fc-surface);
   color: var(--fc-forest);
+  font-family: var(--font-sans);
   font-weight: 700;
+  font-size: 14px;
+  line-height: 1.15;
+  text-align: center;
   border-radius: var(--radius-md);
-  padding: 12px 20px;
   border: 1.5px solid var(--fc-border-md);
   cursor: pointer;
-  font-size: 14px;
   transition: all 0.2s ease;
 }
 .fc-btn-secondary:hover {
@@ -297,30 +315,37 @@ p {
   border-color: var(--fc-fresh);
 }
 
+/* Chip ingrediente & Quick Pills con altezza fissa identica */
 .fc-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  height: 32px;
+  padding: 0 12px;
   background: rgba(50, 133, 103, 0.14);
   color: var(--fc-fresh);
   border: 1px solid rgba(50, 133, 103, 0.28);
   border-radius: 999px;
-  padding: 6px 13px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
 }
 
 .fc-quick-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+  height: 32px;
+  padding: 0 12px;
   background: var(--fc-surface-alt);
   color: var(--fc-charcoal);
   border: 1px solid var(--fc-border);
   border-radius: 999px;
-  padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -331,10 +356,14 @@ p {
 }
 
 .fc-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  line-height: 1.2;
   color: var(--fc-sage);
 }
 
@@ -349,13 +378,16 @@ p {
   box-shadow: var(--fc-shadow-sm);
 }
 
+/* Input e Select con altezza identica (46px) */
 .fc-input {
   width: 100%;
+  height: 46px;
   background: var(--fc-surface-alt);
   border: 1.5px solid var(--fc-border);
   border-radius: var(--radius-md);
-  padding: 12px 15px;
+  padding: 0 14px;
   font-size: 14px;
+  line-height: 1.2;
   font-family: var(--font-sans);
   color: var(--fc-charcoal);
   outline: none;
@@ -370,9 +402,10 @@ p {
   color: var(--fc-sage);
 }
 
-/* Mobile bottom bar */
+/* Mobile bottom bar: 4 colonne identiche al 25% ciascuna */
 .fc-mobile-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   position: fixed;
   bottom: 0;
   left: 0;
@@ -382,7 +415,6 @@ p {
   backdrop-filter: blur(18px);
   border-top: 1px solid var(--fc-border);
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-  justify-content: space-around;
   align-items: center;
 }
 

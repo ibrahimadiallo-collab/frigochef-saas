@@ -296,12 +296,13 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                 justifyContent: 'center',
                 gap: 10,
                 width: '100%',
-                padding: '16px',
+                minHeight: 50,
+                height: 50,
                 fontSize: 15,
               }}
             >
-              <Play size={18} fill="currentColor" />
-              Inizia a Cucinare
+              <Play size={17} fill="currentColor" />
+              <span>Inizia a Cucinare</span>
             </button>
           </div>
         </div>
@@ -309,7 +310,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
         {/* ── FOOTER AZIONI ── */}
         <div
           style={{
-            padding: '14px 28px',
+            padding: '14px 20px',
             borderTop: '1px solid var(--fc-border)',
             background: 'rgba(23,76,60,0.02)',
             display: 'flex',
@@ -319,69 +320,85 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
             gap: 10,
           }}
         >
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
             <button
               onClick={copyToClipboard}
               className="fc-btn-secondary"
               style={{
-                padding: '7px 14px',
+                minHeight: 38,
+                height: 38,
+                padding: '0 14px',
+                borderRadius: 10,
                 fontSize: 12,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 6,
               }}
             >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-              {copied ? 'Copiata!' : 'Copia'}
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              <span>{copied ? 'Copiata!' : 'Copia'}</span>
             </button>
             <button
               onClick={() => setIsShareOpen(true)}
               className="fc-btn-secondary"
               style={{
-                padding: '7px 14px',
+                minHeight: 38,
+                height: 38,
+                padding: '0 14px',
+                borderRadius: 10,
                 fontSize: 12,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 6,
               }}
             >
-              <Share2 size={13} />
-              Condividi
+              <Share2 size={14} />
+              <span>Condividi</span>
             </button>
             <button
               onClick={() => setShowShopping(!showShopping)}
               className="fc-btn-secondary"
               style={{
-                padding: '7px 14px',
+                minHeight: 38,
+                height: 38,
+                padding: '0 14px',
+                borderRadius: 10,
                 fontSize: 12,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 6,
-                background: showShopping ? 'rgba(50,133,103,0.1)' : '#fff',
+                background: showShopping ? 'rgba(50,133,103,0.12)' : 'var(--fc-surface)',
               }}
             >
-              <ShoppingCart size={13} />
-              Lista Spesa
+              <ShoppingCart size={14} />
+              <span>Lista Spesa</span>
             </button>
           </div>
 
           <button
             onClick={handleSave}
+            className="fc-btn-secondary"
             style={{
-              display: 'flex',
+              minHeight: 38,
+              height: 38,
+              padding: '0 14px',
+              borderRadius: 10,
+              display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: 6,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 700,
               color: saved ? 'var(--fc-coral)' : 'var(--fc-fresh)',
-              background: 'none',
-              border: 'none',
+              borderColor: saved ? 'rgba(224,109,83,0.35)' : 'var(--fc-border-md)',
               cursor: 'pointer',
-              transition: 'color 0.2s',
             }}
           >
             <Heart size={14} fill={saved ? 'currentColor' : 'none'} />
-            {saved ? 'Salvata!' : 'Salva nel Ricettario'}
+            <span>{saved ? 'Salvata!' : 'Salva nel Ricettario'}</span>
           </button>
         </div>
 

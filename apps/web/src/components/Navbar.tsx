@@ -214,13 +214,15 @@ function LoginModal({ onClose }: { onClose: () => void }) {
               disabled={googleLoading}
               style={{
                 width: '100%',
-                padding: '13px 18px',
+                height: 48,
+                padding: '0 18px',
                 borderRadius: 'var(--radius-md)',
                 border: '1.5px solid var(--fc-border-md)',
                 background: 'var(--fc-surface)',
                 color: 'var(--fc-charcoal)',
                 fontWeight: 700,
                 fontSize: 14,
+                lineHeight: 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -230,7 +232,7 @@ function LoginModal({ onClose }: { onClose: () => void }) {
               }}
             >
               {googleLoading ? <Loader2 size={18} className="animate-spin" /> : <GoogleIcon />}
-              Continua con Google
+              <span>Continua con Google</span>
             </button>
 
             {/* Divisore */}
@@ -458,9 +460,14 @@ export default function Navbar() {
                   key={link.href}
                   href={link.href}
                   style={{
-                    padding: '8px 15px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 38,
+                    padding: '0 15px',
                     borderRadius: 12,
                     fontSize: 14,
+                    lineHeight: 1,
                     fontWeight: active ? 700 : 600,
                     color: active ? 'var(--fc-forest)' : 'var(--fc-sage)',
                     background: active ? 'rgba(50,133,103,0.12)' : 'transparent',
@@ -487,10 +494,11 @@ export default function Navbar() {
                 border: '1px solid var(--fc-border)',
                 background: 'var(--fc-surface)',
                 color: 'var(--fc-forest)',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
+                flexShrink: 0,
               }}
             >
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
@@ -498,13 +506,17 @@ export default function Navbar() {
 
             {user && isPro && (
               <div
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                className="hidden sm:inline-flex items-center justify-center gap-1.5"
                 style={{
+                  height: 38,
+                  padding: '0 12px',
+                  borderRadius: 12,
                   background: 'rgba(217,233,163,0.25)',
                   border: '1px solid rgba(217,233,163,0.6)',
+                  lineHeight: 1,
                 }}
               >
-                <Crown size={12} style={{ color: 'var(--fc-fresh)' }} />
+                <Crown size={13} style={{ color: 'var(--fc-fresh)' }} />
                 <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)' }}>PRO</span>
               </div>
             )}
@@ -515,29 +527,33 @@ export default function Navbar() {
                   id="user-menu-btn"
                   onClick={() => setMenuOpen(!menuOpen)}
                   style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 8,
-                    padding: '6px 12px',
+                    height: 38,
+                    padding: '0 12px',
                     borderRadius: 12,
                     background: 'var(--fc-surface)',
                     border: '1px solid var(--fc-border)',
                     color: 'var(--fc-forest)',
+                    lineHeight: 1,
                     cursor: 'pointer',
                   }}
                 >
                   <div
                     style={{
-                      width: 26,
-                      height: 26,
+                      width: 24,
+                      height: 24,
                       borderRadius: '50%',
                       background: 'var(--fc-btn-bg)',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 800,
+                      flexShrink: 0,
                     }}
                   >
                     {user.email?.[0]?.toUpperCase() ?? 'U'}
@@ -592,7 +608,14 @@ export default function Navbar() {
                 id="navbar-login-btn"
                 onClick={() => setLoginOpen(true)}
                 className="fc-btn-primary"
-                style={{ padding: '9px 18px', fontSize: 14 }}
+                style={{
+                  minHeight: 38,
+                  height: 38,
+                  padding: '0 18px',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  lineHeight: 1,
+                }}
               >
                 Accedi
               </button>
@@ -613,13 +636,16 @@ export default function Navbar() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 3,
-                padding: '6px 12px',
+                justifyContent: 'center',
+                gap: 4,
+                height: 50,
                 borderRadius: 12,
                 textDecoration: 'none',
                 color: active ? 'var(--fc-fresh)' : 'var(--fc-sage)',
                 fontWeight: active ? 800 : 600,
                 fontSize: 11,
+                lineHeight: 1,
+                textAlign: 'center',
               }}
             >
               {link.icon}

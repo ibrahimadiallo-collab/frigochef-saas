@@ -95,10 +95,20 @@ export default function SmartShoppingList({
           <button
             onClick={copyList}
             className="fc-btn-secondary"
-            style={{ padding: '7px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{
+              minHeight: 36,
+              height: 36,
+              padding: '0 14px',
+              fontSize: 12,
+              borderRadius: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+            }}
           >
             {copied ? <Check size={14} style={{ color: 'var(--fc-fresh)' }} /> : <Copy size={14} />}
-            {copied ? 'Copiata!' : 'Copia Lista'}
+            <span>{copied ? 'Copiata!' : 'Copia Lista'}</span>
           </button>
         )}
       </div>
@@ -106,7 +116,7 @@ export default function SmartShoppingList({
       {/* Body */}
       <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Aggiungi prodotto manuale */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input
             type="text"
             value={newItemName}
@@ -114,14 +124,25 @@ export default function SmartShoppingList({
             onKeyDown={(e) => e.key === 'Enter' && addCustomItem()}
             placeholder="Aggiungi un prodotto alla lista…"
             className="fc-input"
-            style={{ flex: 1, padding: '9px 14px', fontSize: 13 }}
+            style={{ flex: 1, height: 44, padding: '0 14px', fontSize: 13 }}
           />
           <button
             onClick={addCustomItem}
             className="fc-btn-primary"
-            style={{ padding: '9px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{
+              minHeight: 44,
+              height: 44,
+              padding: '0 16px',
+              fontSize: 13,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              flexShrink: 0,
+            }}
           >
-            <Plus size={15} /> Aggiungi
+            <Plus size={15} />
+            <span>Aggiungi</span>
           </button>
         </div>
 

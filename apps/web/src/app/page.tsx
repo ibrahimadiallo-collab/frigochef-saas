@@ -443,24 +443,26 @@ export default function Home() {
                   className="fc-btn-primary"
                   style={{
                     width: '100%',
+                    minHeight: 50,
+                    height: 50,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    padding: '15px',
                     fontSize: 15,
+                    lineHeight: 1,
                     opacity: isLoading ? 0.75 : 1,
                   }}
                 >
                   {isLoading ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      Lo Chef AI sta creando la ricetta…
+                      <span>Lo Chef AI sta creando la ricetta…</span>
                     </>
                   ) : (
                     <>
                       <Sparkles size={18} />
-                      Genera Ricetta Ora
+                      <span>Genera Ricetta Ora</span>
                       <ArrowRight size={16} />
                     </>
                   )}
@@ -473,24 +475,26 @@ export default function Home() {
                   className="fc-btn-secondary"
                   style={{
                     width: '100%',
+                    minHeight: 50,
+                    height: 50,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    padding: '14px',
                     fontSize: 14,
+                    lineHeight: 1,
                     opacity: isPlanLoading ? 0.75 : 1,
                   }}
                 >
                   {isPlanLoading ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Pianificazione settimanale…
+                      <span>Pianificazione settimanale…</span>
                     </>
                   ) : (
                     <>
                       <Calendar size={16} />
-                      Genera Piano Pasti di 7 Giorni
+                      <span>Genera Piano Pasti di 7 Giorni</span>
                     </>
                   )}
                 </button>
@@ -661,17 +665,23 @@ export default function Home() {
                   }}
                   style={{
                     width: '100%',
-                    padding: '14px 18px',
+                    height: 48,
+                    padding: '0 18px',
                     background: '#D9E9A3',
                     color: '#174C3C',
                     fontWeight: 800,
                     fontSize: 14,
+                    lineHeight: 1,
                     borderRadius: 'var(--radius-md)',
                     border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
                     cursor: 'pointer',
                   }}
                 >
-                  Attiva Prova Pro Ora →
+                  <span>Attiva Prova Pro Ora →</span>
                 </button>
               </div>
             </div>
