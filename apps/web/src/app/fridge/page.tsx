@@ -19,10 +19,21 @@ export default function FridgePage() {
   useEffect(() => {
     async function loadPantry() {
       try {
-        const res = await fetch('/api/pantry', { headers: await authHeader() });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.ingredients) setTags(data.ingredients);
+        const localRaw = localStorage.getItem('fc_local_pantry');
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) setTags(parsed);
+        }
+        const headers = await authHeader();
+        if (headers.Authorization) {
+          const res = await fetch('/api/pantry', { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+              setTags(data.ingredients);
+              localStorage.setItem('fc_local_pantry', JSON.stringify(data.ingredients));
+            }
+          }
         }
       } catch (err) {
         console.error('Impossibile caricare la dispensa:', err);
@@ -36,14 +47,18 @@ export default function FridgePage() {
   /* ── Auto-salvataggio ── */
   useEffect(() => {
     if (isPantryLoading) return;
+    localStorage.setItem('fc_local_pantry', JSON.stringify(tags));
+    setLastSaved(new Date());
+
     const save = async () => {
       try {
+        const headers = await authHeader();
+        if (!headers.Authorization) return;
         await fetch('/api/pantry', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+          headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({ ingredients: tags }),
         });
-        setLastSaved(new Date());
       } catch (err) {
         console.error('Salvataggio fallito:', err);
       }

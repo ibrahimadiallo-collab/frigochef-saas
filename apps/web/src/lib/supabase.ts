@@ -3,24 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const DEMO_STORAGE_KEY = 'fc_demo_user';
-
-function getDemoSession() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(DEMO_STORAGE_KEY);
-    if (!raw) return null;
-    const user = JSON.parse(raw);
-    return {
-      access_token: 'demo-token',
-      user,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Implementazione resiliente che non va in crash se il progetto Supabase è in pausa o offline
 const createSafeSupabaseClient = () => {
   const realClient =
     supabaseUrl && supabaseAnonKey
@@ -30,9 +12,8 @@ const createSafeSupabaseClient = () => {
               try {
                 return await fetch(url, options);
               } catch {
-                // Restituisce una risposta 503 pulita invece di lanciare TypeError: Failed to fetch
                 return new Response(
-                  JSON.stringify({ message: 'Servizio Supabase non raggiungibile (progetto in pausa o offline).' }),
+                  JSON.stringify({ message: 'Servizio di autenticazione temporaneamente non raggiungibile.' }),
                   { status: 503, headers: { 'Content-Type': 'application/json' } }
                 );
               }
@@ -41,13 +22,9 @@ const createSafeSupabaseClient = () => {
         })
       : null;
 
-  const authListeners = new Set<(event: string, session: any) => void>();
-
   return {
     auth: {
       getSession: async () => {
-        const demo = getDemoSession();
-        if (demo) return { data: { session: demo }, error: null };
         if (!realClient) return { data: { session: null }, error: null };
         try {
           return await realClient.auth.getSession();
@@ -56,25 +33,12 @@ const createSafeSupabaseClient = () => {
         }
       },
       onAuthStateChange: (callback: (event: any, session: any) => void) => {
-        authListeners.add(callback);
         if (!realClient) {
-          return { data: { subscription: { unsubscribe: () => authListeners.delete(callback) } } };
+          return { data: { subscription: { unsubscribe: () => {} } } };
         }
-        const { data } = realClient.auth.onAuthStateChange(callback);
-        return {
-          data: {
-            subscription: {
-              unsubscribe: () => {
-                authListeners.delete(callback);
-                data.subscription.unsubscribe();
-              },
-            },
-          },
-        };
+        return realClient.auth.onAuthStateChange(callback);
       },
       getUser: async () => {
-        const demo = getDemoSession();
-        if (demo) return { data: { user: demo.user }, error: null };
         if (!realClient) return { data: { user: null }, error: null };
         try {
           return await realClient.auth.getUser();
@@ -87,13 +51,48 @@ const createSafeSupabaseClient = () => {
           return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
         }
         try {
-          const res = await realClient.auth.signInWithOtp(params);
-          return res;
+          return await realClient.auth.signInWithOtp(params);
         } catch {
           return {
             data: { user: null, session: null },
-            error: { message: 'Impossibile connettersi a Supabase (verifica che il progetto non sia in pausa).' },
+            error: { message: 'Impossibile connettersi al server di autenticazione.' },
           };
+        }
+      },
+      signInWithPassword: async (params: { email: string; password: string }) => {
+        if (!realClient) {
+          return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
+        }
+        try {
+          return await realClient.auth.signInWithPassword(params);
+        } catch {
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Impossibile connettersi al server di autenticazione.' },
+          };
+        }
+      },
+      signUp: async (params: { email: string; password: string; options?: any }) => {
+        if (!realClient) {
+          return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
+        }
+        try {
+          return await realClient.auth.signUp(params);
+        } catch {
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Impossibile completare la registrazione.' },
+          };
+        }
+      },
+      resetPasswordForEmail: async (email: string, options?: any) => {
+        if (!realClient) {
+          return { data: null, error: { message: 'Supabase non configurato' } };
+        }
+        try {
+          return await realClient.auth.resetPasswordForEmail(email, options);
+        } catch {
+          return { data: null, error: { message: 'Impossibile inviare email di recupero.' } };
         }
       },
       signInWithOAuth: async (params: { provider: 'google'; options?: any }) => {
@@ -101,21 +100,20 @@ const createSafeSupabaseClient = () => {
           return { data: { provider: 'google', url: null }, error: { message: 'Supabase non configurato' } };
         }
         try {
-          // Verifica preventiva: controlla se Supabase è raggiungibile e se il provider Google è attivo
           const settingsRes = await fetch(`${supabaseUrl}/auth/v1/settings`, {
             headers: { apikey: supabaseAnonKey },
           });
           if (!settingsRes.ok) {
             return {
               data: { provider: 'google', url: null },
-              error: { message: 'Supabase non raggiungibile o in pausa.' },
+              error: { message: 'Server di autenticazione Supabase in pausa o non raggiungibile.' },
             };
           }
           const settings = await settingsRes.json();
           if (!settings?.external?.google) {
             return {
               data: { provider: 'google', url: null },
-              error: { message: 'Provider Google non ancora attivo su Supabase.' },
+              error: { message: 'L’accesso con Google non è ancora stato abilitato nel pannello Supabase (Authentication → Providers → Google). Usa l’accesso con Email.' },
             };
           }
 
@@ -129,29 +127,11 @@ const createSafeSupabaseClient = () => {
         } catch {
           return {
             data: { provider: 'google', url: null },
-            error: { message: 'Impossibile connettersi a Google OAuth.' },
+            error: { message: 'Impossibile contattare il provider Google OAuth.' },
           };
         }
       },
-      signInDemo: (email: string) => {
-        const demoUser = {
-          id: 'demo-user-id',
-          email,
-          role: 'authenticated',
-          created_at: new Date().toISOString(),
-        };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(demoUser));
-        }
-        const session = { access_token: 'demo-token', user: demoUser };
-        authListeners.forEach((cb) => cb('SIGNED_IN', session));
-        return { data: { user: demoUser, session }, error: null };
-      },
       signOut: async () => {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(DEMO_STORAGE_KEY);
-        }
-        authListeners.forEach((cb) => cb('SIGNED_OUT', null));
         if (!realClient) return { error: null };
         try {
           return await realClient.auth.signOut();
@@ -183,7 +163,7 @@ export async function authHeader(): Promise<Record<string, string>> {
   if (!supabaseUrl || !supabaseAnonKey) return {};
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    return session ? { Authorization: `Bearer ${session.access_token}` } : {};
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
   } catch {
     return {};
   }

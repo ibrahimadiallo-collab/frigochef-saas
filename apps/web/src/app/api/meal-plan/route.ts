@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { generateMealPlan } from '@/lib/ai';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { verifyAndConsumeAIQuota } from '@/lib/quotas';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +15,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const { ingredients } = await req.json();
-
-    if (!ingredients) {
+    const body = await req.json();
+    const rawIngredients = typeof body.ingredients === 'string' ? body.ingredients.trim() : '';
+    if (!rawIngredients || rawIngredients.length < 2) {
       return NextResponse.json({ error: 'Ingredienti mancanti' }, { status: 400 });
     }
+    if (rawIngredients.length > 600) {
+      return NextResponse.json(
+        { error: 'Lista ingredienti troppo lunga (massimo 600 caratteri).' },
+        { status: 400 }
+      );
+    }
 
-    const plan = await generateMealPlan(ingredients);
+    const dietaryPreferences = Array.isArray(body.dietaryPreferences)
+      ? body.dietaryPreferences.filter((x: unknown): x is string => typeof x === 'string').slice(0, 10)
+      : [];
+    const allergens = Array.isArray(body.allergens)
+      ? body.allergens.filter((x: unknown): x is string => typeof x === 'string').slice(0, 10)
+      : [];
+
+    // Controllo quote mensili Free (1/mese) vs Plus (4/mese)
+    const quota = await verifyAndConsumeAIQuota(req, 'meal_plan');
+    if (!quota.allowed) {
+      return NextResponse.json(
+        { error: quota.errorMessage, quotaExceeded: true, isPro: quota.isPro },
+        { status: 429 }
+      );
+    }
+
+    const plan = await generateMealPlan(rawIngredients, dietaryPreferences, allergens);
     return NextResponse.json(plan);
   } catch (error: unknown) {
     console.error('API Error:', error);

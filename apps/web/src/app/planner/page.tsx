@@ -24,10 +24,20 @@ export default function PlannerPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/pantry', { headers: await authHeader() });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.ingredients) setPantryTags(data.ingredients);
+        const localRaw = localStorage.getItem('fc_local_pantry');
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) setPantryTags(parsed);
+        }
+        const headers = await authHeader();
+        if (headers.Authorization) {
+          const res = await fetch('/api/pantry', { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+              setPantryTags(data.ingredients);
+            }
+          }
         }
       } catch {
         // dispensa non disponibile

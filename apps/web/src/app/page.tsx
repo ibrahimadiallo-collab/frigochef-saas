@@ -9,11 +9,14 @@ import ReferralDashboard from '@/components/ReferralDashboard';
 import MealPlanner from '@/components/MealPlanner';
 import {
   Sparkles, Loader2, ArrowRight, ChefHat, Calendar,
-  Refrigerator, Flame, TrendingUp, Star, CheckCircle2, Camera, Utensils
+  Refrigerator, Flame, TrendingUp, CheckCircle2, Camera, Utensils, Leaf, Check
 } from 'lucide-react';
 import { authHeader } from '@/lib/supabase';
 import { Recipe, MealPlan } from '@/lib/ai';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
+
+const FILTRI_DIETA = ['Vegetariano', 'Vegano', 'Senza Glutine', 'Senza Lattosio'];
 
 /* ── Stat Card singola ── */
 function StatCard({
@@ -67,6 +70,9 @@ export default function Home() {
   const [expiryItems, setExpiryItems] = useState<{ name: string; daysRemaining: number }[]>([]);
   const [mealType, setMealType] = useState('cena');
   const [time, setTime] = useState('normale');
+  const [dietaryPreferences, setDietaryPreferences] = useState<string[]>([]);
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
   const [isLoading, setIsLoading] = useState(false);
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -74,14 +80,35 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isPantryLoading, setIsPantryLoading] = useState(true);
 
-  /* ── Caricamento dispensa ── */
+  /* ── Caricamento dispensa isolata (localStorage per ospiti, Supabase per utenti autenticati) ── */
   useEffect(() => {
+    const savedDiets = localStorage.getItem('fc_diet_prefs');
+    const savedAllergens = localStorage.getItem('fc_allergens');
+    if (savedDiets) {
+      try { setDietaryPreferences(JSON.parse(savedDiets)); } catch { /* ignore */ }
+    }
+    if (savedAllergens) {
+      try { setAllergens(JSON.parse(savedAllergens)); } catch { /* ignore */ }
+    }
+
     async function loadPantry() {
       try {
-        const res = await fetch('/api/pantry', { headers: await authHeader() });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.ingredients) setTags(data.ingredients);
+        const localRaw = localStorage.getItem('fc_local_pantry');
+        if (localRaw) {
+          const parsed = JSON.parse(localRaw);
+          if (Array.isArray(parsed)) setTags(parsed);
+        }
+
+        const headers = await authHeader();
+        if (headers.Authorization) {
+          const res = await fetch('/api/pantry', { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+              setTags(data.ingredients);
+              localStorage.setItem('fc_local_pantry', JSON.stringify(data.ingredients));
+            }
+          }
         }
       } catch (err) {
         console.error('Impossibile caricare la dispensa:', err);
@@ -92,23 +119,35 @@ export default function Home() {
     loadPantry();
   }, []);
 
-  /* ── Auto-salvataggio dispensa ── */
+  /* ── Auto-salvataggio dispensa (isolato sul dispositivo + sync cloud se autenticato) ── */
   useEffect(() => {
     if (isPantryLoading) return;
+    localStorage.setItem('fc_local_pantry', JSON.stringify(tags));
+
     const save = async () => {
       try {
+        const headers = await authHeader();
+        if (!headers.Authorization) return;
         await fetch('/api/pantry', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+          headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({ ingredients: tags }),
         });
-      } catch (err) {
-        console.error('Impossibile salvare la dispensa:', err);
+      } catch {
+        // salvato in localStorage
       }
     };
     const id = setTimeout(save, 800);
     return () => clearTimeout(id);
   }, [tags, isPantryLoading]);
+
+  const toggleDietFilter = (diet: string) => {
+    const next = dietaryPreferences.includes(diet)
+      ? dietaryPreferences.filter((d) => d !== diet)
+      : [...dietaryPreferences, diet];
+    setDietaryPreferences(next);
+    localStorage.setItem('fc_diet_prefs', JSON.stringify(next));
+  };
 
   /* ── Genera ricetta ── */
   const handleGenerate = async () => {
@@ -121,13 +160,20 @@ export default function Home() {
     setRecipe(null);
 
     try {
+      const headers = await authHeader();
       const res = await fetch('/api/recipe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients: tags.join(', '), mealType, time }),
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          ingredients: tags.join(', '),
+          mealType,
+          time,
+          dietaryPreferences,
+          allergens,
+        }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (!res.ok || data.error) throw new Error(data.error || 'Errore nella generazione');
       setRecipe(data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Qualcosa è andato storto. Riprova.';
@@ -147,13 +193,18 @@ export default function Home() {
     setError(null);
 
     try {
+      const headers = await authHeader();
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients: tags.join(', ') }),
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          ingredients: tags.join(', '),
+          dietaryPreferences,
+          allergens,
+        }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (!res.ok || data.error) throw new Error(data.error || 'Impossibile generare il piano');
       setMealPlan(data);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Impossibile generare il piano pasti.';
@@ -180,7 +231,7 @@ export default function Home() {
 
       <div className="fc-container" style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
         {/* ════════════════════════════════════
-            HERO — Social Proof + Headline + Value Props
+            HERO — Posizionamento Trasparente (Fase 3.1 & 8.1)
         ════════════════════════════════════ */}
         <section>
           <motion.div
@@ -189,7 +240,6 @@ export default function Home() {
             transition={{ duration: 0.45 }}
             style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           >
-            {/* Social Proof Pill */}
             <div
               style={{
                 display: 'inline-flex',
@@ -202,15 +252,9 @@ export default function Home() {
                 alignSelf: 'flex-start',
               }}
             >
-              <div style={{ display: 'flex', color: '#E6A100' }}>
-                <Star size={12} fill="currentColor" />
-                <Star size={12} fill="currentColor" />
-                <Star size={12} fill="currentColor" />
-                <Star size={12} fill="currentColor" />
-                <Star size={12} fill="currentColor" />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '0.02em' }}>
-                4.9/5 • Oltre 2.400 cucine smart in Italia
+              <Leaf size={13} style={{ color: 'var(--fc-fresh)' }} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                FrigoChef — La Tua Cucina, Più Intelligente
               </span>
             </div>
 
@@ -224,20 +268,20 @@ export default function Home() {
                 maxWidth: 680,
               }}
             >
-              Trasforma ciò che hai in frigo nel tuo prossimo piatto.
+              Organizza la dispensa, cucina ciò che hai e riduci gli sprechi.
             </h1>
 
             <p style={{ fontSize: 16, color: 'var(--fc-sage)', fontWeight: 500, maxWidth: 560, lineHeight: 1.55 }}>
-              Scatta una foto al frigorifero o seleziona gli ingredienti disponibili: il nostro
-              Chef AI crea ricette su misura, calcola le calorie e azzera gli sprechi.
+              Fotografa il contenuto del frigorifero o seleziona gli ingredienti disponibili:
+              FrigoChef crea ricette personalizzate, piani settimanali e liste della spesa intelligenti.
             </p>
 
-            {/* Value Badges */}
+            {/* Caratteristiche reali del prodotto */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, paddingTop: 4 }}>
               {[
-                'Ricette pronte in 5 secondi',
-                'Valori nutrizionali inclusi',
-                'Fino a 120 €/mese risparmiati',
+                'Riconoscimento ingredienti da foto',
+                'Filtri dietetici e allergeni personalizzabili',
+                'Piano settimanale e lista della spesa inclusi',
               ].map((badge) => (
                 <div
                   key={badge}
@@ -277,7 +321,7 @@ export default function Home() {
               {urgentItems.length > 0 && (
                 <StatCard
                   icon={<Flame size={18} />}
-                  label="da usare presto"
+                  label="in scadenza"
                   value={urgentItems.length}
                   sublabel="controlla il Radar"
                   accent="var(--fc-coral)"
@@ -339,21 +383,22 @@ export default function Home() {
                   <Sparkles size={19} style={{ color: 'var(--fc-fresh)' }} />
                   Crea la tua Ricetta con l&apos;AI
                 </h2>
-                <span
+                <Link
+                  href="/profile"
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    padding: '3px 10px',
+                    padding: '4px 10px',
                     borderRadius: 999,
                     background: 'rgba(50,133,103,0.12)',
                     color: 'var(--fc-fresh)',
+                    textDecoration: 'none',
                   }}
                 >
-                  Gemini 2.0 Flash
-                </span>
+                  {allergens.length > 0 ? `${allergens.length} allergeni esclusi` : 'Configura allergeni →'}
+                </Link>
               </div>
 
-              {/* Input ingredienti */}
               {isPantryLoading ? (
                 <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Loader2 className="animate-spin" size={24} style={{ color: 'var(--fc-sage)' }} />
@@ -366,8 +411,36 @@ export default function Home() {
                 />
               )}
 
+              {/* Filtri dietetici rapidi (Fase 3.4) */}
+              <div style={{ marginTop: 14 }}>
+                <span className="fc-label" style={{ marginBottom: 8, display: 'block' }}>
+                  Filtri Alimentari
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {FILTRI_DIETA.map((diet) => {
+                    const active = dietaryPreferences.includes(diet);
+                    return (
+                      <button
+                        key={diet}
+                        type="button"
+                        onClick={() => toggleDietFilter(diet)}
+                        className="fc-quick-pill"
+                        style={{
+                          background: active ? 'var(--fc-btn-bg)' : 'var(--fc-surface-alt)',
+                          color: active ? '#fff' : 'var(--fc-charcoal)',
+                          borderColor: active ? 'var(--fc-btn-bg)' : 'var(--fc-border)',
+                        }}
+                      >
+                        {active && <Check size={11} />}
+                        <span>{diet}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Selettori tipo pasto + tempo */}
-              <div className="fc-select-grid" style={{ marginTop: 18 }}>
+              <div className="fc-select-grid" style={{ marginTop: 16 }}>
                 <div>
                   <label
                     htmlFor="meal-type-select"
@@ -511,79 +584,102 @@ export default function Home() {
               {mealPlan && <MealPlanner plan={mealPlan} />}
             </AnimatePresence>
 
-            {/* Sezione "Come funziona" (visibile quando non c'è ancora una ricetta) */}
+            {/* Sezione "Come funziona" + Suggerimento anti-spreco del giorno (Fase 3.1) */}
             {!recipe && !mealPlan && !isLoading && !isPlanLoading && (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: 14,
-                }}
-              >
-                {[
-                  {
-                    step: '01',
-                    icon: <Camera size={20} />,
-                    title: 'Scansiona o inserisci',
-                    desc: 'Fotografa il frigo o tocca gli ingredienti che hai già in casa.',
-                  },
-                  {
-                    step: '02',
-                    icon: <Sparkles size={20} />,
-                    title: 'Ricetta su misura',
-                    desc: "L'AI combina i sapori migliori e dà priorità ai cibi in scadenza.",
-                  },
-                  {
-                    step: '03',
-                    icon: <Utensils size={20} />,
-                    title: 'Cucina passo-passo',
-                    desc: 'Segui la Modalità Cucina con timer integrato e valori nutrizionali.',
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.step}
-                    className="fc-card"
-                    style={{
-                      padding: '20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 12,
-                          background: 'rgba(50,133,103,0.12)',
-                          color: 'var(--fc-fresh)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {item.icon}
-                      </div>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--fc-sage)', opacity: 0.6 }}>
-                        PASSO {item.step}
-                      </span>
-                    </div>
-                    <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--fc-forest)' }}>
-                      {item.title}
-                    </h3>
-                    <p style={{ fontSize: 13, color: 'var(--fc-sage)', lineHeight: 1.5 }}>
-                      {item.desc}
+              <>
+                <div
+                  className="fc-card"
+                  style={{
+                    padding: '18px 20px',
+                    background: 'rgba(50,133,103,0.08)',
+                    borderColor: 'rgba(50,133,103,0.25)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                  }}
+                >
+                  <Leaf size={18} style={{ color: 'var(--fc-fresh)', flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <p className="fc-label" style={{ color: 'var(--fc-fresh)', marginBottom: 2 }}>
+                      Suggerimento Anti-Spreco del Giorno
+                    </p>
+                    <p style={{ fontSize: 13, color: 'var(--fc-charcoal)', lineHeight: 1.5 }}>
+                      Disponi in prima fila nel frigorifero gli alimenti aperti o con scadenza ravvicinata e usa la funzione <strong>Scansiona il frigo con AI</strong> per creare ricette che li valorizzino per primi.
                     </p>
                   </div>
-                ))}
-              </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {[
+                    {
+                      step: '01',
+                      icon: <Camera size={20} />,
+                      title: 'Scansiona e verifica',
+                      desc: 'Fotografa il frigo e conferma gli ingredienti riconosciuti prima di salvarli.',
+                    },
+                    {
+                      step: '02',
+                      icon: <Sparkles size={20} />,
+                      title: 'Ricetta su misura',
+                      desc: "L'AI combina i tuoi ingredienti rispettando diete e allergeni impostati.",
+                    },
+                    {
+                      step: '03',
+                      icon: <Utensils size={20} />,
+                      title: 'Cucina e pianifica',
+                      desc: 'Segui la Modalità Cucina con timer integrato o genera la lista della spesa.',
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.step}
+                      className="fc-card"
+                      style={{
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 12,
+                            background: 'rgba(50,133,103,0.12)',
+                            color: 'var(--fc-fresh)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {item.icon}
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--fc-sage)', opacity: 0.6 }}>
+                          PASSO {item.step}
+                        </span>
+                      </div>
+                      <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--fc-forest)' }}>
+                        {item.title}
+                      </h3>
+                      <p style={{ fontSize: 13, color: 'var(--fc-sage)', lineHeight: 1.5 }}>
+                        {item.desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
-          {/* ── COLONNA DESTRA: Radar + Pro + Referral ── */}
+          {/* ── COLONNA DESTRA: Radar + Piano Plus + Referral ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Freshness Radar */}
             {expiryItems.length > 0 && (
               <div className="fc-card" style={{ padding: '22px 20px' }}>
                 <ExpirationTracker
@@ -596,7 +692,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Card Pro */}
+            {/* Card FrigoChef Plus (Fase 2.1 & 2.5: Mensile 5,99 € / Annuale 49,99 € + 7 giorni prova gratuita) */}
             <div
               id="pricing"
               className="fc-card"
@@ -608,17 +704,6 @@ export default function Home() {
                 overflow: 'hidden',
               }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: -30,
-                  right: -30,
-                  width: 130,
-                  height: 130,
-                  borderRadius: '50%',
-                  background: 'rgba(217,233,163,0.10)',
-                }}
-              />
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div
                   style={{
@@ -633,35 +718,87 @@ export default function Home() {
                 >
                   <TrendingUp size={11} style={{ color: '#D9E9A3' }} />
                   <span style={{ fontSize: 10, fontWeight: 800, color: '#D9E9A3', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-                    Offerta Lancio
+                    7 Giorni di Prova Gratuita
                   </span>
                 </div>
 
                 <h3 style={{ fontSize: 21, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em', marginBottom: 8 }}>
-                  Passa a FrigoChef Pro
+                  FrigoChef Plus
                 </h3>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, marginBottom: 18 }}>
-                  Scansioni AI illimitate del frigo, piano alimentare settimanale completo, calcolo macro e account famiglia.
+                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.80)', lineHeight: 1.55, marginBottom: 14 }}>
+                  50 ricette AI/giorno, 50 scansioni frigo/mese, 4 piani settimanali/mese e personalizzazione nutrizionale avanzata.
                 </p>
 
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
+                {/* Selettore Mensile / Annuale */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 6,
+                    padding: 4,
+                    borderRadius: 12,
+                    background: 'rgba(0,0,0,0.22)',
+                    marginBottom: 16,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('monthly')}
+                    style={{
+                      height: 32,
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: billingCycle === 'monthly' ? '#D9E9A3' : 'transparent',
+                      color: billingCycle === 'monthly' ? '#174C3C' : '#fff',
+                    }}
+                  >
+                    Mensile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('annual')}
+                    style={{
+                      height: 32,
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: billingCycle === 'annual' ? '#D9E9A3' : 'transparent',
+                      color: billingCycle === 'annual' ? '#174C3C' : '#fff',
+                    }}
+                  >
+                    Annuale (-30%)
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 18 }}>
                   <span style={{ fontSize: 34, fontWeight: 900, color: '#FFFFFF', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                    5,99 €
+                    {billingCycle === 'annual' ? '49,99 €' : '5,99 €'}
                   </span>
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
-                    / mese • disdici quando vuoi
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.70)' }}>
+                    {billingCycle === 'annual' ? '/ anno (4,16 €/mese)' : '/ mese'}
                   </span>
                 </div>
 
                 <button
                   onClick={async () => {
+                    const headers = await authHeader();
+                    if (!headers.Authorization) {
+                      document.getElementById('navbar-login-btn')?.click();
+                      return;
+                    }
                     const res = await fetch('/api/stripe/checkout', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-                      body: JSON.stringify({ priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_placeholder' }),
+                      headers: { 'Content-Type': 'application/json', ...headers },
+                      body: JSON.stringify({ plan: billingCycle }),
                     });
                     const data = await res.json();
                     if (data.url) window.location.href = data.url;
+                    else if (data.error) setError(data.error);
                   }}
                   style={{
                     width: '100%',
@@ -681,18 +818,24 @@ export default function Home() {
                     cursor: 'pointer',
                   }}
                 >
-                  <span>Attiva Prova Pro Ora →</span>
+                  <span>Inizia 7 Giorni Gratis →</span>
                 </button>
+
+                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 10, textAlign: 'center' }}>
+                  Rinnovo automatico · Disdici in qualsiasi momento dal{' '}
+                  <Link href="/profile" style={{ color: '#D9E9A3', textDecoration: 'underline' }}>
+                    Profilo
+                  </Link>
+                </p>
               </div>
             </div>
 
-            {/* Referral */}
             <ReferralDashboard />
           </div>
         </div>
       </div>
 
-      {/* ── FOOTER ── */}
+      {/* ── FOOTER CON PAGINE LEGALI VERIFICATE (Fase 5.1 & 8.1) ── */}
       <footer
         style={{
           borderTop: '1px solid var(--fc-border)',
@@ -720,16 +863,19 @@ export default function Home() {
               © 2026 · La tua cucina, più intelligente.
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 20 }}>
-            {['Privacy', 'Termini', 'Contatti'].map((link) => (
-              <a
-                key={link}
-                href="#"
-                style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}
-              >
-                {link}
-              </a>
-            ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
+            <Link href="/privacy" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
+              Privacy & Cookie
+            </Link>
+            <Link href="/terms" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
+              Termini e Condizioni
+            </Link>
+            <Link href="/contact" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
+              Assistenza & FAQ
+            </Link>
+            <Link href="/profile" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
+              Gestione Abbonamento & GDPR
+            </Link>
           </div>
         </div>
       </footer>

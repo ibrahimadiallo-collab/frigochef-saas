@@ -29,6 +29,7 @@ const createSafeAdminClient = () => {
         eq: () => ({
           single: async () => ({ data: null, error: null }),
           order: () => ({ data: [], error: null }),
+          gte: async () => ({ count: 0, data: [], error: null }),
         }),
       }),
       upsert: async () => ({ data: null, error: null }),
@@ -40,24 +41,31 @@ const createSafeAdminClient = () => {
       update: () => ({
         eq: async () => ({ data: null, error: null }),
       }),
+      delete: () => ({
+        eq: async () => ({ data: null, error: null }),
+      }),
     }),
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
+      admin: {
+        deleteUser: async () => ({ data: null, error: null }),
+      },
     },
   } as any;
 };
 
 export const supabaseAdmin = createSafeAdminClient();
 
+/**
+ * Verifica rigorosa del token JWT tramite Supabase Auth.
+ * Nessun token fittizio (es. demo-token) viene mai accettato dal server.
+ */
 export async function getUserFromRequest(req: Request) {
   try {
     const authHeader = req.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
 
-    if (!token) return null;
-    if (token === 'demo-token') {
-      return { id: 'demo-user-id', email: 'chef@frigochef.it' } as any;
-    }
+    if (!token || token.length < 20) return null;
     if (!supabaseAdmin.auth) return null;
 
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);

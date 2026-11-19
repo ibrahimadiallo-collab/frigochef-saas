@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Leaf, AlertTriangle, Calendar, ArrowRight, Clock } from 'lucide-react';
+import { Leaf, AlertTriangle, Calendar, ArrowRight, Clock, ShieldAlert } from 'lucide-react';
 
 interface ExpiryItem {
   name: string;
@@ -13,38 +13,57 @@ interface ExpirationTrackerProps {
   onFindRecipe?: (ingredient: string) => void;
 }
 
-type Category = 'fresh' | 'soon' | 'check';
+type Category = 'fresh' | 'soon' | 'expiring' | 'expired';
 
 function getCategory(days: number): Category {
-  if (days <= 2) return 'check';
+  if (days <= 0) return 'expired';
+  if (days <= 2) return 'expiring';
   if (days <= 4) return 'soon';
   return 'fresh';
 }
 
-const categoryConfig = {
+const categoryConfig: Record<
+  Category,
+  {
+    label: string;
+    bg: string;
+    border: string;
+    dot: string;
+    text: string;
+    icon: React.ReactNode;
+  }
+> = {
   fresh: {
-    label: 'Fresco',
-    bg: 'rgba(217,233,163,0.4)',
-    border: 'rgba(217,233,163,0.9)',
-    dot: '#5a8c2a',
+    label: 'Freschi',
+    bg: 'rgba(217,233,163,0.35)',
+    border: 'rgba(217,233,163,0.85)',
+    dot: '#4d7c22',
     text: '#2d5a1b',
     icon: <Leaf size={15} />,
   },
   soon: {
-    label: 'Usa Presto',
-    bg: 'rgba(233,139,112,0.10)',
-    border: 'rgba(233,139,112,0.3)',
-    dot: '#E98B70',
-    text: '#c0533a',
+    label: 'Da consumare presto',
+    bg: 'rgba(233,168,112,0.14)',
+    border: 'rgba(233,168,112,0.38)',
+    dot: '#d97706',
+    text: '#b45309',
     icon: <Clock size={15} />,
   },
-  check: {
-    label: 'Controlla Scadenza',
-    bg: 'rgba(233,139,112,0.18)',
-    border: 'rgba(233,139,112,0.5)',
+  expiring: {
+    label: 'In scadenza',
+    bg: 'rgba(224,109,83,0.15)',
+    border: 'rgba(224,109,83,0.45)',
     dot: '#c0533a',
     text: '#a03520',
     icon: <AlertTriangle size={15} />,
+  },
+  expired: {
+    label: 'Scaduti / Da verificare',
+    bg: 'rgba(185,28,28,0.12)',
+    border: 'rgba(185,28,28,0.35)',
+    dot: '#b91c1c',
+    text: '#991b1b',
+    icon: <ShieldAlert size={15} />,
   },
 };
 
@@ -56,49 +75,44 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
   const groups: Record<Category, ExpiryItem[]> = {
     fresh: [],
     soon: [],
-    check: [],
+    expiring: [],
+    expired: [],
   };
   sorted.forEach((item) => groups[getCategory(item.daysRemaining)].push(item));
 
   const allColumns: { cat: Category; items: ExpiryItem[] }[] = [
-    { cat: 'check', items: groups.check },
+    { cat: 'expired', items: groups.expired },
+    { cat: 'expiring', items: groups.expiring },
     { cat: 'soon', items: groups.soon },
     { cat: 'fresh', items: groups.fresh },
   ];
   const columns = allColumns.filter((col) => col.items.length > 0);
 
   return (
-    <div className="fc-animate-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="fc-animate-up" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div
             style={{
               width: 32,
               height: 32,
               borderRadius: 10,
-              background: 'rgba(23,76,60,0.08)',
+              background: 'rgba(50,133,103,0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--fc-forest)',
+              color: 'var(--fc-fresh)',
             }}
           >
             <Calendar size={16} />
           </div>
           <div>
-            <h3
-              style={{
-                fontSize: 16,
-                fontWeight: 800,
-                color: 'var(--fc-forest)',
-                letterSpacing: '-0.02em',
-              }}
-            >
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--fc-forest)' }}>
               Freshness Radar
             </h3>
             <p style={{ fontSize: 12, color: 'var(--fc-sage)', marginTop: 1 }}>
-              Stime AI sulla freschezza degli ingredienti
+              Monitoraggio scadenze in 4 livelli di priorità
             </p>
           </div>
         </div>
@@ -107,21 +121,21 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
             fontSize: 11,
             fontWeight: 700,
             color: 'var(--fc-fresh)',
-            background: 'rgba(50,133,103,0.08)',
-            border: '1px solid rgba(50,133,103,0.2)',
+            background: 'rgba(50,133,103,0.10)',
+            border: '1px solid rgba(50,133,103,0.22)',
             borderRadius: 999,
-            padding: '3px 10px',
+            padding: '4px 10px',
           }}
         >
-          {items.length} ingredienti monitorati
+          {items.length} alimenti monitorati
         </span>
       </div>
 
-      {/* Colonne per categoria */}
+      {/* Colonne per le 4 categorie */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
           gap: 12,
         }}
       >
@@ -134,14 +148,13 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                 background: cfg.bg,
                 border: `1px solid ${cfg.border}`,
                 borderRadius: 'var(--radius-md)',
-                padding: 16,
+                padding: 14,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 10,
               }}
             >
-              {/* Intestazione colonna */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: cfg.text }}>{cfg.icon}</span>
                 <span
                   style={{
@@ -149,20 +162,19 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                     fontWeight: 800,
                     color: cfg.text,
                     textTransform: 'uppercase',
-                    letterSpacing: '0.07em',
+                    letterSpacing: '0.06em',
                   }}
                 >
-                  {cfg.label}
+                  {cfg.label} ({colItems.length})
                 </span>
               </div>
 
-              {/* Schede ingredienti */}
               {colItems.map((item, i) => (
                 <motion.div
                   key={`${item.name}-${i}`}
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.07 }}
+                  transition={{ delay: i * 0.05 }}
                   style={{
                     background: 'var(--fc-surface)',
                     borderRadius: 'var(--radius-sm)',
@@ -170,12 +182,11 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 8,
-                    boxShadow: '0 1px 4px rgba(23,76,60,0.06)',
+                    boxShadow: 'var(--fc-shadow-sm)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      {/* Dot status */}
                       <span
                         className="fc-pulse-dot"
                         style={{
@@ -185,7 +196,8 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                           borderRadius: '50%',
                           background: cfg.dot,
                           flexShrink: 0,
-                          animationPlayState: cat === 'check' ? 'running' : 'paused',
+                          animationPlayState:
+                            cat === 'expiring' || cat === 'expired' ? 'running' : 'paused',
                         }}
                       />
                       <span
@@ -199,44 +211,23 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                         {item.name}
                       </span>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: cfg.text,
-                      }}
-                    >
-                      {item.daysRemaining === 0
-                        ? 'Oggi'
+                    <span style={{ fontSize: 11, fontWeight: 700, color: cfg.text }}>
+                      {item.daysRemaining < 0
+                        ? 'Scaduto'
+                        : item.daysRemaining === 0
+                        ? 'Scade oggi'
                         : item.daysRemaining === 1
-                        ? 'Domani'
+                        ? '1 giorno'
                         : `${item.daysRemaining} giorni`}
                     </span>
                   </div>
 
-                  {/* Barra freschezza */}
-                  <div
-                    style={{
-                      height: 3,
-                      background: 'rgba(23,76,60,0.08)',
-                      borderRadius: 999,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.max(8, 100 - item.daysRemaining * 10)}%` }}
-                      transition={{ delay: i * 0.07 + 0.2, duration: 0.5 }}
-                      style={{ height: '100%', background: cfg.dot, borderRadius: 999 }}
-                    />
-                  </div>
-
-                  {/* CTA solo per urgenti e "usa presto" */}
-                  {(cat === 'check' || cat === 'soon') && onFindRecipe && (
+                  {(cat === 'expiring' || cat === 'soon') && onFindRecipe && (
                     <button
+                      type="button"
                       onClick={() => onFindRecipe(item.name)}
                       style={{
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
                         gap: 4,
                         fontSize: 11,
@@ -249,8 +240,8 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
                         textAlign: 'left',
                       }}
                     >
-                      Trova una ricetta
-                      <ArrowRight size={10} />
+                      <span>Usa in una ricetta</span>
+                      <ArrowRight size={11} />
                     </button>
                   )}
                 </motion.div>
@@ -260,26 +251,20 @@ export default function ExpirationTracker({ items, onFindRecipe }: ExpirationTra
         })}
       </div>
 
-      {/* Suggerimento contestuale */}
-      {groups.check.length > 0 && (
-        <div
-          style={{
-            padding: '12px 16px',
-            background: 'rgba(233,139,112,0.08)',
-            border: '1px solid rgba(233,139,112,0.25)',
-            borderRadius: 'var(--radius-md)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 10,
-          }}
-        >
-          <AlertTriangle size={15} style={{ color: 'var(--fc-coral)', flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 12, color: '#a03520', lineHeight: 1.5 }}>
-            <strong>{groups.check[0].name}</strong> è il tuo ingrediente più urgente. Usalo oggi in una
-            ricetta express per evitare sprechi.
-          </p>
-        </div>
-      )}
+      {/* Avvertenza obbligatoria di sicurezza alimentare (Fase 3.2) */}
+      <div
+        style={{
+          padding: '10px 14px',
+          background: 'var(--fc-surface-alt)',
+          border: '1px solid var(--fc-border)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: 11,
+          color: 'var(--fc-sage)',
+          lineHeight: 1.45,
+        }}
+      >
+        <strong>Nota sulla sicurezza alimentare:</strong> Le scadenze proposte dall&apos;AI sono stime indicative e non costituiscono una garanzia di sicurezza alimentare. Verifica sempre la data riportata sulla confezione e lo stato di conservazione reale dell&apos;alimento.
+      </div>
     </div>
   );
 }

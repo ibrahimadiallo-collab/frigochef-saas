@@ -17,6 +17,9 @@ export interface Recipe {
   };
   sostenibilita: number;
   ingredienti: string[];
+  ingredienti_mancanti?: string[];
+  sostituzioni?: string[];
+  allergeni_da_verificare?: string[];
   passaggi: string[];
 }
 
@@ -29,20 +32,53 @@ export interface DayPlan {
 
 export type MealPlan = DayPlan[];
 
-export async function generateRecipe(ingredients: string, mealType: string, time: string): Promise<Recipe> {
+function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timeout della richiesta AI (25s). Riprova tra qualche istante."));
+    }, ms);
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
+export async function generateRecipe(
+  ingredients: string,
+  mealType: string,
+  time: string,
+  dietaryPreferences: string[] = [],
+  allergens: string[] = []
+): Promise<Recipe> {
   if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
-Crea UNA ricetta per ${mealType}, tempo: ${time}.
-Calcola accuratamente calorie e macro-nutrienti (proteine, carboidrati, grassi).
+  const dietNote =
+    dietaryPreferences.length > 0
+      ? `\nRispetta rigorosamente queste preferenze alimentari: ${dietaryPreferences.join(', ')}.`
+      : '';
+  const allergenNote =
+    allergens.length > 0
+      ? `\nEVITA assolutamente questi allergeni dichiarati dall'utente: ${allergens.join(', ')}.`
+      : '';
+
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
+Crea UNA ricetta per ${mealType}, tempo: ${time}.${dietNote}${allergenNote}
+Stima calorie e macro-nutrienti (proteine, carboidrati, grassi), indica eventuali ingredienti base mancanti, possibili sostituzioni e gli allergeni potenzialmente presenti da verificare sull'etichetta.
 
 Rispondi SOLO con JSON valido:
 {
   "nome": "Nome del piatto",
   "tempo": "X minuti",
-  "porzioni": "X persone",
+  "porzioni": "2 persone",
   "difficolta": "Facile",
   "nutrizione": {
     "calorie": 0,
@@ -50,11 +86,16 @@ Rispondi SOLO con JSON valido:
     "carboidrati": "0g",
     "grassi": "0g"
   },
-  "sostenibilita": 0,
+  "sostenibilita": 85,
   "ingredienti": ["quantità ingrediente", ...],
+  "ingredienti_mancanti": ["eventuale ingrediente extra", ...],
+  "sostituzioni": ["Es. Usa ricotta al posto della panna", ...],
+  "allergeni_da_verificare": ["Glutine", "Lattosio", ...],
   "passaggi": ["Passo dettagliato 1", ...]
-}`
-  });
+}`,
+    }),
+    25000
+  );
 
   const text = response.text || '';
 
@@ -67,9 +108,14 @@ Rispondi SOLO con JSON valido:
       porzioni: parsed.porzioni || '2 persone',
       difficolta: parsed.difficolta || 'Media',
       nutrizione: parsed.nutrizione || { calorie: 0, proteine: '0g', carboidrati: '0g', grassi: '0g' },
-      sostenibilita: parsed.sostenibilita || 50,
+      sostenibilita: parsed.sostenibilita || 80,
       ingredienti: Array.isArray(parsed.ingredienti) ? parsed.ingredienti : [],
-      passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : []
+      ingredienti_mancanti: Array.isArray(parsed.ingredienti_mancanti) ? parsed.ingredienti_mancanti : [],
+      sostituzioni: Array.isArray(parsed.sostituzioni) ? parsed.sostituzioni : [],
+      allergeni_da_verificare: Array.isArray(parsed.allergeni_da_verificare)
+        ? parsed.allergeni_da_verificare
+        : [],
+      passaggi: Array.isArray(parsed.passaggi) ? parsed.passaggi : [],
     };
   } catch {
     console.error("Gemini 2.0 Parsing Error:", text);
@@ -77,13 +123,23 @@ Rispondi SOLO con JSON valido:
   }
 }
 
-export async function generateMealPlan(ingredients: string): Promise<MealPlan> {
+export async function generateMealPlan(
+  ingredients: string,
+  dietaryPreferences: string[] = [],
+  allergens: string[] = []
+): Promise<MealPlan> {
   if (!ai) throw new Error("GEMINI_API_KEY non configurata.");
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.
-Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e sostenibile.
+  const dietNote =
+    dietaryPreferences.length > 0 ? ` Preferenze: ${dietaryPreferences.join(', ')}.` : '';
+  const allergenNote =
+    allergens.length > 0 ? ` Escludi allergeni: ${allergens.join(', ')}.` : '';
+
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.${dietNote}${allergenNote}
+Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e anti-spreco.
 Rispondi SOLO con un array JSON di 7 oggetti.
 Ogni oggetto deve avere:
 {
@@ -91,8 +147,10 @@ Ogni oggetto deve avere:
   "colazione": { "nome": "...", "tempo": "...", "calorie": 0 },
   "pranzo": { "nome": "...", "tempo": "...", "calorie": 0 },
   "cena": { "nome": "...", "tempo": "...", "calorie": 0 }
-}`
-  });
+}`,
+    }),
+    25000
+  );
 
   const text = response.text || '';
 

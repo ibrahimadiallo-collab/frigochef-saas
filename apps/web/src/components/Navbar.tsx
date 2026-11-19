@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LogOut, Crown, X, Mail, Loader2, Sun, Moon,
-  Home, Refrigerator, BookOpen, Calendar
+  Home, Refrigerator, BookOpen, Calendar, User as UserIcon, KeyRound
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
@@ -61,12 +61,14 @@ function GoogleIcon() {
   );
 }
 
-/* ── Modal Login con Google + Magic Link ── */
+/* ── Modal Login completo (Fase 1.1: Google OAuth, Magic Link, Email+Password, Recupero Password) ── */
 function LoginModal({ onClose }: { onClose: () => void }) {
+  const [authMode, setAuthMode] = useState<'magic' | 'password' | 'signup' | 'reset'>('magic');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sentMessage, setSentMessage] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const handleGoogleLogin = async () => {
@@ -84,15 +86,12 @@ function LoginModal({ onClose }: { onClose: () => void }) {
         window.location.href = data.url;
         return;
       }
-      // Se Google OAuth non è ancora attivo su Supabase o il progetto è in pausa,
-      // esegue l'accesso immediato senza mandare l'utente su una pagina di errore.
-      const googleEmail = email.trim() || 'utente.google@gmail.com';
-      supabase.auth.signInDemo?.(googleEmail);
-      onClose();
+      setError(
+        err?.message ||
+          "L'accesso con Google richiede l'attivazione del provider Google su Supabase. Puoi accedere subito con la tua Email qui sotto."
+      );
     } catch {
-      const googleEmail = email.trim() || 'utente.google@gmail.com';
-      supabase.auth.signInDemo?.(googleEmail);
-      onClose();
+      setError('Impossibile contattare il provider Google. Usa l’accesso con Email qui sotto.');
     } finally {
       setGoogleLoading(false);
     }
@@ -109,31 +108,37 @@ function LoginModal({ onClose }: { onClose: () => void }) {
       const ref = params.get('ref');
       if (ref) localStorage.setItem('referral_code', ref);
 
-      const { error: err } = await supabase.auth.signInWithOtp({
-        email,
-        options: { data: { referred_by: ref } },
-      });
-
-      setLoading(false);
-      if (err) {
-        setError(
-          'Il server email è temporaneamente in pausa. Puoi accedere subito con Google o con la Modalità Demo qui sotto.'
-        );
-      } else {
-        setSent(true);
+      if (authMode === 'magic') {
+        const { error: err } = await supabase.auth.signInWithOtp({
+          email,
+          options: { data: { referred_by: ref } },
+        });
+        if (err) setError(err.message);
+        else setSentMessage('Ti abbiamo inviato un Link Magico via email. Cliccalo per accedere.');
+      } else if (authMode === 'password') {
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+        if (err) setError(err.message);
+        else onClose();
+      } else if (authMode === 'signup') {
+        const { error: err } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { referred_by: ref } },
+        });
+        if (err) setError(err.message);
+        else setSentMessage('Registrazione completata! Controlla la tua email per verificare l’account.');
+      } else if (authMode === 'reset') {
+        const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/profile` : undefined,
+        });
+        if (err) setError(err.message);
+        else setSentMessage('Email di recupero password inviata. Controlla la tua casella di posta.');
       }
     } catch {
+      setError('Errore di rete durante l’autenticazione.');
+    } finally {
       setLoading(false);
-      setError(
-        'Impossibile contattare il server di autenticazione. Usa Google o la Modalità Demo qui sotto.'
-      );
     }
-  };
-
-  const handleDemoLogin = () => {
-    const demoEmail = email.trim() || 'chef@frigochef.it';
-    supabase.auth.signInDemo?.(demoEmail);
-    onClose();
   };
 
   return (
@@ -175,19 +180,19 @@ function LoginModal({ onClose }: { onClose: () => void }) {
           <X size={16} />
         </button>
 
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-5">
           <FrigoChefLogo size={38} />
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--fc-forest)', marginBottom: 2 }}>
-              Benvenuto su FrigoChef
+              Accedi a FrigoChef
             </h2>
             <p style={{ fontSize: 13, color: 'var(--fc-sage)' }}>
-              Accedi in un secondo per sincronizzare la tua cucina
+              Sincronizza dispensa, ricette e piano settimanale
             </p>
           </div>
         </div>
 
-        {sent ? (
+        {sentMessage ? (
           <div
             style={{
               borderRadius: 'var(--radius-md)',
@@ -199,11 +204,9 @@ function LoginModal({ onClose }: { onClose: () => void }) {
           >
             <Mail size={28} style={{ color: 'var(--fc-fresh)', margin: '0 auto 8px' }} />
             <p style={{ fontWeight: 800, color: 'var(--fc-forest)', marginBottom: 4 }}>
-              Link inviato alla tua email!
+              Controlla la tua email
             </p>
-            <p style={{ fontSize: 13, color: 'var(--fc-sage)' }}>
-              Controlla la posta in arrivo e clicca sul link per entrare.
-            </p>
+            <p style={{ fontSize: 13, color: 'var(--fc-sage)' }}>{sentMessage}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -235,22 +238,49 @@ function LoginModal({ onClose }: { onClose: () => void }) {
               <span>Continua con Google</span>
             </button>
 
-            {/* Divisore */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '2px 0' }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--fc-border)' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fc-sage)', textTransform: 'uppercase' }}>
-                oppure con email
-              </span>
-              <div style={{ flex: 1, height: 1, background: 'var(--fc-border)' }} />
+            {/* Selettore modalità email */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 4,
+                padding: 4,
+                borderRadius: 12,
+                background: 'var(--fc-surface-alt)',
+                border: '1px solid var(--fc-border)',
+              }}
+            >
+              {[
+                { id: 'magic', label: 'Link Magico' },
+                { id: 'password', label: 'Password' },
+                { id: 'signup', label: 'Registrati' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setAuthMode(tab.id as any);
+                    setError('');
+                  }}
+                  style={{
+                    height: 32,
+                    borderRadius: 8,
+                    border: 'none',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: authMode === tab.id ? 'var(--fc-surface)' : 'transparent',
+                    color: authMode === tab.id ? 'var(--fc-forest)' : 'var(--fc-sage)',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label
-                  htmlFor="login-email"
-                  className="fc-label"
-                  style={{ display: 'block', marginBottom: 6 }}
-                >
+                <label htmlFor="login-email" className="fc-label" style={{ display: 'block', marginBottom: 6 }}>
                   Indirizzo Email
                 </label>
                 <input
@@ -264,6 +294,42 @@ function LoginModal({ onClose }: { onClose: () => void }) {
                 />
               </div>
 
+              {(authMode === 'password' || authMode === 'signup') && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label htmlFor="login-password" className="fc-label">
+                      Password
+                    </label>
+                    {authMode === 'password' && (
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode('reset')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: 'var(--fc-fresh)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Password dimenticata?
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    id="login-password"
+                    type="password"
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Almeno 6 caratteri"
+                    className="fc-input"
+                    required
+                  />
+                </div>
+              )}
+
               {error && (
                 <div
                   style={{
@@ -271,19 +337,12 @@ function LoginModal({ onClose }: { onClose: () => void }) {
                     borderRadius: 'var(--radius-sm)',
                     background: 'rgba(224,109,83,0.12)',
                     border: '1px solid rgba(224,109,83,0.35)',
+                    fontSize: 12,
+                    color: 'var(--fc-charcoal)',
+                    lineHeight: 1.4,
                   }}
                 >
-                  <p style={{ fontSize: 12, color: 'var(--fc-charcoal)', marginBottom: 8, lineHeight: 1.4 }}>
-                    {error}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleDemoLogin}
-                    className="fc-btn-secondary"
-                    style={{ width: '100%', padding: '8px 12px', fontSize: 12 }}
-                  >
-                    Accedi subito in Modalità Demo
-                  </button>
+                  {error}
                 </div>
               )}
 
@@ -291,33 +350,26 @@ function LoginModal({ onClose }: { onClose: () => void }) {
                 type="submit"
                 disabled={loading}
                 className="fc-btn-primary"
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
+                style={{ width: '100%' }}
               >
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
-                {loading ? 'Invio in corso...' : 'Ricevi Link Magico'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                style={{
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: 'var(--fc-fresh)',
-                  cursor: 'pointer',
-                  padding: '4px 0',
-                }}
-              >
-                Prova subito come ospite senza registrazione →
+                {loading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : authMode === 'magic' ? (
+                  <Mail size={16} />
+                ) : (
+                  <KeyRound size={16} />
+                )}
+                <span>
+                  {loading
+                    ? 'Attendere…'
+                    : authMode === 'magic'
+                    ? 'Ricevi Link di Accesso'
+                    : authMode === 'password'
+                    ? 'Accedi con Password'
+                    : authMode === 'signup'
+                    ? 'Crea Account Gratuito'
+                    : 'Invia Email di Recupero'}
+                </span>
               </button>
             </form>
           </div>
@@ -336,7 +388,6 @@ export default function Navbar() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const pathname = usePathname();
 
-  /* ── Gestione Tema Chiaro / Scuro con preferenza di sistema ── */
   useEffect(() => {
     const saved = localStorage.getItem('fc-theme') as 'light' | 'dark' | null;
     if (saved === 'light' || saved === 'dark') {
@@ -408,6 +459,7 @@ export default function Navbar() {
     { href: '/fridge', label: 'Il Mio Frigo', icon: <Refrigerator size={18} /> },
     { href: '/recipes', label: 'Ricette', icon: <BookOpen size={18} /> },
     { href: '/planner', label: 'Piano Pasti', icon: <Calendar size={18} /> },
+    { href: '/profile', label: 'Profilo', icon: <UserIcon size={18} /> },
   ];
 
   return (
@@ -432,7 +484,6 @@ export default function Navbar() {
             gap: 12,
           }}
         >
-          {/* Logo */}
           <Link
             href="/"
             className="flex items-center gap-2.5"
@@ -451,7 +502,6 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Nav links — desktop */}
           <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {
               const active = pathname === link.href;
@@ -480,9 +530,7 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Destra: Theme toggle + Pro badge + Utente */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Pulsante Tema Chiaro / Scuro */}
             <button
               onClick={toggleTheme}
               title={theme === 'dark' ? 'Passa a Modalità Chiara' : 'Passa a Modalità Scura'}
@@ -517,7 +565,7 @@ export default function Navbar() {
                 }}
               >
                 <Crown size={13} style={{ color: 'var(--fc-fresh)' }} />
-                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)' }}>PRO</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fc-forest)' }}>PLUS</span>
               </div>
             )}
 
@@ -579,6 +627,25 @@ export default function Navbar() {
                         </p>
                         <p style={{ fontSize: 11, color: 'var(--fc-sage)' }}>{user.email}</p>
                       </div>
+                      <Link
+                        href="/profile"
+                        onClick={() => setMenuOpen(false)}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          textDecoration: 'none',
+                          fontSize: 13,
+                          color: 'var(--fc-charcoal)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <UserIcon size={14} />
+                        Profilo & Abbonamento
+                      </Link>
                       <button
                         onClick={handleLogout}
                         style={{
@@ -624,8 +691,11 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Barra di navigazione inferiore per smartphone (Mobile Bottom Nav) */}
-      <div className="fc-mobile-nav">
+      {/* Barra di navigazione inferiore per smartphone (5 voci centrate) */}
+      <div
+        className="fc-mobile-nav"
+        style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}
+      >
         {navLinks.map((link) => {
           const active = pathname === link.href;
           return (
@@ -643,7 +713,7 @@ export default function Navbar() {
                 textDecoration: 'none',
                 color: active ? 'var(--fc-fresh)' : 'var(--fc-sage)',
                 fontWeight: active ? 800 : 600,
-                fontSize: 11,
+                fontSize: 10,
                 lineHeight: 1,
                 textAlign: 'center',
               }}
@@ -655,7 +725,6 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* Modal login */}
       <AnimatePresence>
         {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
       </AnimatePresence>

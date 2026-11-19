@@ -24,6 +24,9 @@ interface Recipe {
   };
   sostenibilita?: number;
   ingredienti: string[];
+  ingredienti_mancanti?: string[];
+  sostituzioni?: string[];
+  allergeni_da_verificare?: string[];
   passaggi: string[];
 }
 
@@ -241,6 +244,62 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                 </li>
               ))}
             </ul>
+
+            {/* Eventuali ingredienti mancanti o sostituzioni (Fase 3.4) */}
+            {recipe.ingredienti_mancanti && recipe.ingredienti_mancanti.length > 0 && (
+              <div style={{ paddingTop: 10, borderTop: '1px solid var(--fc-border)' }}>
+                <p className="fc-label" style={{ color: 'var(--fc-coral)', marginBottom: 6 }}>
+                  Ingredienti extra / mancanti
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {recipe.ingredienti_mancanti.map((m, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '3px 10px',
+                        borderRadius: 999,
+                        background: 'rgba(224,109,83,0.12)',
+                        color: 'var(--fc-coral)',
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {recipe.sostituzioni && recipe.sostituzioni.length > 0 && (
+              <div style={{ paddingTop: 8 }}>
+                <p className="fc-label" style={{ marginBottom: 4 }}>Possibili Sostituzioni</p>
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--fc-sage)', lineHeight: 1.5 }}>
+                  {recipe.sostituzioni.map((s, idx) => (
+                    <li key={idx}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Allergeni da verificare (Fase 3.4) */}
+            <div
+              style={{
+                marginTop: 'auto',
+                padding: '10px 12px',
+                borderRadius: 10,
+                background: 'var(--fc-surface-alt)',
+                border: '1px solid var(--fc-border)',
+                fontSize: 11,
+                color: 'var(--fc-sage)',
+                lineHeight: 1.4,
+              }}
+            >
+              <strong>Allergeni da verificare:</strong>{' '}
+              {recipe.allergeni_da_verificare && recipe.allergeni_da_verificare.length > 0
+                ? recipe.allergeni_da_verificare.join(', ')
+                : 'Controlla sempre le etichette degli ingredienti utilizzati.'}
+            </div>
           </div>
 
           {/* Procedimento (preview) + CTA */}
