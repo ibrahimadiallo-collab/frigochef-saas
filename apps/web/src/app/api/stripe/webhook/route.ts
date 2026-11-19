@@ -5,66 +5,122 @@ import Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
 
+// Durata massima del lock 'processing' prima che un evento venga considerato bloccato (5 minuti)
+export const WEBHOOK_LOCK_TIMEOUT_SECONDS = 300;
+
 /**
- * CRITICO 2 — Webhook Stripe con:
- * 1. Idempotenza atomica tramite INSERT su `stripe_webhook_events` (PK `event_id`).
- * 2. Verifica esplicita di `error` su OGNI aggiornamento Supabase (`if (error) throw error`).
- * 3. Rollback del lock `processing` e risposta HTTP 500 in caso di errore DB, così Stripe riprova.
+ * CRITICO 1 — Gestore atomico dell'evento Stripe con recupero degli eventi bloccati (stale lock recovery):
+ * - 'ALREADY_COMPLETED' -> 200 { received: true, duplicate: true }
+ * - 'IN_PROGRESS' (lock attivo < 5 min) -> 409 Conflict (Stripe riproverà se la prima istanza dovesse fallire)
+ * - 'CLAIMED' o 'RECLAIMED' (lock scaduto >= 5 min) -> Elabora l'evento, verifica ogni errore DB e marca 'completed'
  */
-export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = req.headers.get('stripe-signature');
+export async function processStripeWebhookEvent(
+  event: Stripe.Event,
+  db: typeof supabaseAdmin = supabaseAdmin,
+  nowMs: number = Date.now()
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const nowISO = new Date(nowMs).toISOString();
+  let lockAcquired = false;
 
-  if (!stripe || !signature || !process.env.STRIPE_WEBHOOK_SECRET) {
-    return NextResponse.json(
-      { error: 'Stripe non configurato o firma webhook mancante' },
-      { status: 400 }
-    );
+  // 1. Tentativo primario: funzione RPC atomica PostgreSQL `claim_stripe_webhook_event`
+  if (typeof db.rpc === 'function') {
+    const { data: rpcClaim, error: rpcError } = await db.rpc('claim_stripe_webhook_event', {
+      p_event_id: event.id,
+      p_event_type: event.type,
+      p_lock_timeout_seconds: WEBHOOK_LOCK_TIMEOUT_SECONDS,
+    });
+
+    if (!rpcError && rpcClaim && typeof rpcClaim === 'object') {
+      const action = (rpcClaim as { action?: string }).action;
+      if (action === 'ALREADY_COMPLETED') {
+        return { status: 200, body: { received: true, duplicate: true } };
+      }
+      if (action === 'IN_PROGRESS') {
+        // IMPORTANTE: non restituire 200 per un evento ancora in elaborazione, altrimenti Stripe non riproverà mai se l'altra istanza crasha
+        return {
+          status: 409,
+          body: { error: 'Event is currently being processed by an active worker', retryable: true },
+        };
+      }
+      if (action === 'CLAIMED' || action === 'RECLAIMED') {
+        lockAcquired = true;
+      }
+    } else if (rpcError && rpcError.code !== 'PGRST202' && rpcError.code !== '42883') {
+      console.error('Errore RPC claim_stripe_webhook_event:', rpcError);
+      return {
+        status: 500,
+        body: { error: 'Database unavailable for webhook idempotency lock' },
+      };
+    }
   }
 
-  let event: Stripe.Event;
-
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err);
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-  }
-
-  // 1. Acquisizione atomica dell'evento (INSERT su chiave primaria event_id)
-  const { error: claimError } = await supabaseAdmin
-    .from('stripe_webhook_events')
-    .insert([
+  // 2. Fallback SQL atomico con scadenza del lock (se la RPC non è ancora stata applicata)
+  if (!lockAcquired) {
+    const { error: claimError } = await db.from('stripe_webhook_events').insert([
       {
         event_id: event.id,
         event_type: event.type,
         status: 'processing',
-        processed_at: new Date().toISOString(),
+        locked_at: nowISO,
+        processed_at: nowISO,
       },
     ]);
 
-  if (claimError) {
-    // 23505 = unique_violation su PostgreSQL: l'evento è già stato registrato
-    if (claimError.code === '23505') {
-      const { data: existing } = await supabaseAdmin
-        .from('stripe_webhook_events')
-        .select('status')
-        .eq('event_id', event.id)
-        .single();
+    if (claimError) {
+      if (claimError.code === '23505') {
+        const { data: existing, error: readErr } = await db
+          .from('stripe_webhook_events')
+          .select('status, locked_at, processed_at')
+          .eq('event_id', event.id)
+          .single();
 
-      if (!existing || existing.status === 'completed' || existing.status === 'processing') {
-        return NextResponse.json({ received: true, duplicate: true });
+        if (readErr || !existing) {
+          return {
+            status: 500,
+            body: { error: 'Unable to read existing webhook lock state' },
+          };
+        }
+
+        if (existing.status === 'completed') {
+          return { status: 200, body: { received: true, duplicate: true } };
+        }
+
+        const lockTimestamp = existing.locked_at || existing.processed_at;
+        const lockAgeMs = lockTimestamp ? nowMs - new Date(lockTimestamp).getTime() : Infinity;
+
+        if (lockAgeMs < WEBHOOK_LOCK_TIMEOUT_SECONDS * 1000) {
+          return {
+            status: 409,
+            body: { error: 'Event is currently being processed by an active worker', retryable: true },
+          };
+        }
+
+        // Lock scaduto (>= 5 minuti): recupera atomicamente l'evento bloccato
+        const { error: reclaimError } = await db
+          .from('stripe_webhook_events')
+          .update({
+            status: 'processing',
+            locked_at: nowISO,
+            processed_at: nowISO,
+          })
+          .eq('event_id', event.id);
+
+        if (reclaimError) {
+          return {
+            status: 500,
+            body: { error: 'Failed to reclaim stale webhook lock' },
+          };
+        }
+        lockAcquired = true;
+      } else {
+        console.error('Impossibile registrare lock idempotenza Stripe:', claimError);
+        return {
+          status: 500,
+          body: { error: 'Database unavailable for webhook idempotency check' },
+        };
       }
     } else {
-      console.error('Impossibile registrare lock idempotenza Stripe:', claimError);
-      return NextResponse.json(
-        { error: 'Database unavailable for webhook idempotency check' },
-        { status: 500 }
-      );
+      lockAcquired = true;
     }
   }
 
@@ -83,7 +139,7 @@ export async function POST(req: Request) {
         }
 
         if (paymentVerified) {
-          const { error: updateError } = await supabaseAdmin
+          const { error: updateError } = await db
             .from('profiles')
             .update({
               is_pro: true,
@@ -113,7 +169,7 @@ export async function POST(req: Request) {
           ? new Date(rawPeriodEnd * 1000).toISOString()
           : null;
 
-        const { error: updateError } = await supabaseAdmin
+        const { error: updateError } = await db
           .from('profiles')
           .update({
             is_pro: isActive,
@@ -134,7 +190,7 @@ export async function POST(req: Request) {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
 
-        const { error: updateError } = await supabaseAdmin
+        const { error: updateError } = await db
           .from('profiles')
           .update({
             is_pro: false,
@@ -153,7 +209,7 @@ export async function POST(req: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
         if (customerId) {
-          const { error: updateError } = await supabaseAdmin
+          const { error: updateError } = await db
             .from('profiles')
             .update({
               is_pro: true,
@@ -172,9 +228,10 @@ export async function POST(req: Request) {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId = invoice.customer as string;
         if (customerId) {
-          const { error: updateError } = await supabaseAdmin
+          const { error: updateError } = await db
             .from('profiles')
             .update({
+              is_pro: false,
               subscription_status: 'past_due',
             })
             .eq('stripe_customer_id', customerId);
@@ -187,12 +244,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Segna l'evento come 'completed' SOLO dopo che l'aggiornamento su Supabase è riuscito senza errori
-    const { error: finalizeError } = await supabaseAdmin
+    const { error: finalizeError } = await db
       .from('stripe_webhook_events')
       .update({
         status: 'completed',
-        processed_at: new Date().toISOString(),
+        processed_at: new Date(nowMs).toISOString(),
       })
       .eq('event_id', event.id);
 
@@ -200,19 +256,46 @@ export async function POST(req: Request) {
       throw new Error(`Impossibile finalizzare evento webhook ${event.id}: ${finalizeError.message}`);
     }
 
-    return NextResponse.json({ received: true });
+    return { status: 200, body: { received: true } };
   } catch (err) {
     console.error(`Error processing Stripe webhook ${event.type} (${event.id}):`, err);
 
-    // Rollback del record 'processing' così Stripe può riprovare l'evento
-    await supabaseAdmin
+    await db
       .from('stripe_webhook_events')
       .delete()
       .eq('event_id', event.id);
 
+    return {
+      status: 500,
+      body: { error: err instanceof Error ? err.message : 'Webhook processing failed' },
+    };
+  }
+}
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = req.headers.get('stripe-signature');
+
+  if (!stripe || !signature || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Webhook processing failed' },
-      { status: 500 }
+      { error: 'Stripe non configurato o firma webhook mancante' },
+      { status: 400 }
     );
   }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err);
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  const result = await processStripeWebhookEvent(event, supabaseAdmin);
+  return NextResponse.json(result.body, { status: result.status });
 }

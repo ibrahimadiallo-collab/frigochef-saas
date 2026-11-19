@@ -1,6 +1,9 @@
 -- ============================================================================
--- ROLLBACK: 20261120000001_security_saas_2_rollback.sql
--- DESCRIZIONE: Procedura di rollback controllato per la migrazione security_saas_2
+-- SAFE ROLLBACK: 20261120000001_security_saas_2_rollback.sql
+-- DESCRIZIONE: Rollback NON DISTRUTTIVO (ALTO 4).
+-- Rimuove esclusivamente le funzioni procedurali e i trigger introdotti dalla
+-- migrazione security_saas_2, SENZA MAI eseguire DROP COLUMN o DROP TABLE
+-- su tabelle contenenti dati degli utenti o informazioni sugli abbonamenti.
 -- ============================================================================
 
 BEGIN;
@@ -9,20 +12,10 @@ DROP FUNCTION IF EXISTS public.consume_ai_quota(UUID, TEXT, TEXT);
 DROP TRIGGER IF EXISTS trg_prevent_profile_escalation ON public.profiles;
 DROP FUNCTION IF EXISTS public.prevent_profile_privilege_escalation();
 
-ALTER TABLE public.stripe_webhook_events
-  DROP COLUMN IF EXISTS status;
-
-ALTER TABLE public.pantry
-  DROP COLUMN IF EXISTS items_detail;
-
-ALTER TABLE public.profiles
-  DROP COLUMN IF EXISTS stripe_subscription_id,
-  DROP COLUMN IF EXISTS subscription_status,
-  DROP COLUMN IF EXISTS subscription_plan,
-  DROP COLUMN IF EXISTS subscription_period_end,
-  DROP COLUMN IF EXISTS trial_used,
-  DROP COLUMN IF EXISTS dietary_preferences,
-  DROP COLUMN IF EXISTS allergens,
-  DROP COLUMN IF EXISTS updated_at;
+-- NOTA DI SICUREZZA (ALTO 4):
+-- Le colonne di `public.profiles` (stripe_subscription_id, subscription_status,
+-- subscription_plan, subscription_period_end, trial_used, dietary_preferences,
+-- allergens, updated_at) e `public.pantry` (items_detail) vengono preservate
+-- intenzionalmente per garantire zero perdita di dati preesistenti o di fatturazione.
 
 COMMIT;

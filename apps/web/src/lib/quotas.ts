@@ -1,4 +1,5 @@
 import { supabaseAdmin, getUserFromRequest } from './supabase-admin';
+import { getTrustedClientIpHash } from './rate-limit';
 
 export type AIActionType = 'recipe' | 'vision' | 'meal_plan';
 
@@ -25,50 +26,29 @@ export interface QuotaCheckResult {
   errorMessage?: string;
 }
 
-// Mutex in-process per serializzare richieste simultanee dello stesso utente anche nel fallback applicativo
-const userLocks = new Map<string, Promise<unknown>>();
-
-async function withUserLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
-  const previous = userLocks.get(lockKey) || Promise.resolve();
-  let release!: () => void;
-  const current = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  userLocks.set(lockKey, previous.then(() => current));
-
-  await previous;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (userLocks.get(lockKey) === current) {
-      userLocks.delete(lockKey);
-    }
-  }
-}
-
-function getPeriodStartISO(period: 'day' | 'month'): string {
-  const now = new Date();
-  if (period === 'day') {
-    now.setUTCHours(0, 0, 0, 0);
-  } else {
-    now.setUTCDate(1);
-    now.setUTCHours(0, 0, 0, 0);
-  }
-  return now.toISOString();
+export interface QuotaDependencies {
+  getUser?: typeof getUserFromRequest;
+  db?: typeof supabaseAdmin;
 }
 
 /**
- * CRITICO 1 — Verifica e consumo ATOMICO e PERSISTENTE della quota AI.
+ * CRITICO 2 & ALTO 3 — Verifica e consumo ATOMICO e PERSISTENTE della quota AI.
  * 1. Richiede obbligatoriamente un utente autenticato con JWT valido (401 se non autenticato).
- * 2. Esegue la funzione atomica PostgreSQL `consume_ai_quota` (protetta da pg_advisory_xact_lock).
- * 3. Non utilizza contatori volatili in memoria: fail-closed se il database restituisce un errore.
+ * 2. Invia al database esclusivamente un digest SHA-256 pseudonimizzato dell'IP (mai l'IP in chiaro).
+ * 3. Esegue ESCLUSIVAMENTE la funzione RPC atomica PostgreSQL `public.consume_ai_quota`
+ *    (protetta da `pg_advisory_xact_lock`).
+ * 4. Nessun fallback non atomico: se la RPC non è disponibile o restituisce errore, risponde
+ *    fail-closed con HTTP 503 impedendo qualsiasi chiamata AI non protetta.
  */
 export async function verifyAndConsumeAIQuota(
   req: Request,
-  action: AIActionType
+  action: AIActionType,
+  deps: QuotaDependencies = {}
 ): Promise<QuotaCheckResult> {
-  const user = await getUserFromRequest(req);
+  const getUser = deps.getUser || getUserFromRequest;
+  const db = deps.db || supabaseAdmin;
+
+  const user = await getUser(req);
   if (!user || !user.id) {
     return {
       allowed: false,
@@ -82,153 +62,66 @@ export async function verifyAndConsumeAIQuota(
   }
 
   const userId = user.id;
-  const forwarded = req.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0].trim() : 'local';
+  const ipHash = getTrustedClientIpHash(req);
 
-  return withUserLock(`${userId}:${action}`, async () => {
-    // 1. Tentativo primario: funzione RPC atomica su PostgreSQL (`public.consume_ai_quota`)
-    if (typeof supabaseAdmin.rpc === 'function') {
-      const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('consume_ai_quota', {
-        p_user_id: userId,
-        p_action_type: action,
-        p_ip_hash: ip,
-      });
-
-      if (!rpcError && rpcData && typeof rpcData === 'object') {
-        const isPro = Boolean(rpcData.is_pro);
-        const allowed = Boolean(rpcData.allowed);
-        const limit = Number(rpcData.limit) || (isPro ? PLAN_LIMITS.plus[action].max : PLAN_LIMITS.free[action].max);
-        const remaining = Number(rpcData.remaining) || 0;
-        const tier = isPro ? PLAN_LIMITS.plus[action] : PLAN_LIMITS.free[action];
-
-        if (!allowed) {
-          return {
-            allowed: false,
-            statusCode: 429,
-            isPro,
-            userId,
-            remaining: 0,
-            limit,
-            errorMessage: isPro
-              ? `Hai raggiunto il limite del piano FrigoChef Plus (${tier.label}).`
-              : `Hai raggiunto il limite del piano Free (${tier.label}). Passa a FrigoChef Plus per sbloccare fino a ${PLAN_LIMITS.plus[action].label}.`,
-          };
-        }
-
-        return {
-          allowed: true,
-          statusCode: 200,
-          isPro,
-          userId,
-          remaining,
-          limit,
-        };
-      }
-
-      // Se l'errore NON è "funzione non ancora migrata" (PGRST202 / 42883), fail-closed per sicurezza
-      if (rpcError && rpcError.code !== 'PGRST202' && rpcError.code !== '42883') {
-        console.error('Errore RPC consume_ai_quota:', rpcError);
-        return {
-          allowed: false,
-          statusCode: 503,
-          isPro: false,
-          userId,
-          remaining: 0,
-          limit: 0,
-          errorMessage: 'Impossibile verificare la quota AI sul database. Riprova tra qualche istante.',
-        };
-      }
-    }
-
-    // 2. Fallback persistente su database (serializzato tramite withUserLock) se la migrazione RPC non è ancora stata applicata
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('is_pro, subscription_period_end')
-      .eq('id', userId)
-      .single();
-
-    if (profileError && profileError.code !== 'PGRST116') {
-      console.error('Errore lettura profilo per quota AI:', profileError);
-      return {
-        allowed: false,
-        statusCode: 503,
-        isPro: false,
-        userId,
-        remaining: 0,
-        limit: 0,
-        errorMessage: 'Impossibile verificare il piano utente sul database.',
-      };
-    }
-
-    const periodValid =
-      !profile?.subscription_period_end ||
-      new Date(profile.subscription_period_end).getTime() > Date.now();
-    const isPro = Boolean(profile?.is_pro && periodValid);
-    const tier = isPro ? PLAN_LIMITS.plus[action] : PLAN_LIMITS.free[action];
-    const since = getPeriodStartISO(tier.period);
-
-    const { count, error: countError } = await supabaseAdmin
-      .from('ai_usage_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('action_type', action)
-      .gte('created_at', since);
-
-    if (countError || typeof count !== 'number') {
-      console.error('Errore conteggio ai_usage_logs:', countError);
-      return {
-        allowed: false,
-        statusCode: 503,
-        isPro,
-        userId,
-        remaining: 0,
-        limit: tier.max,
-        errorMessage: 'Servizio di verifica quote temporaneamente non disponibile.',
-      };
-    }
-
-    if (count >= tier.max) {
-      return {
-        allowed: false,
-        statusCode: 429,
-        isPro,
-        userId,
-        remaining: 0,
-        limit: tier.max,
-        errorMessage: isPro
-          ? `Hai raggiunto il limite del piano FrigoChef Plus (${tier.label}).`
-          : `Hai raggiunto il limite del piano Free (${tier.label}). Passa a FrigoChef Plus per sbloccare fino a ${PLAN_LIMITS.plus[action].label}.`,
-      };
-    }
-
-    const { error: insertError } = await supabaseAdmin.from('ai_usage_logs').insert([
-      {
-        user_id: userId,
-        ip_hash: ip,
-        action_type: action,
-      },
-    ]);
-
-    if (insertError) {
-      console.error('Errore registrazione consumo quota AI:', insertError);
-      return {
-        allowed: false,
-        statusCode: 503,
-        isPro,
-        userId,
-        remaining: 0,
-        limit: tier.max,
-        errorMessage: 'Impossibile registrare il consumo della quota AI.',
-      };
-    }
-
+  if (typeof db.rpc !== 'function') {
     return {
-      allowed: true,
-      statusCode: 200,
+      allowed: false,
+      statusCode: 503,
+      isPro: false,
+      userId,
+      remaining: 0,
+      limit: 0,
+      errorMessage: 'Servizio di verifica quote AI non disponibile (RPC non configurata).',
+    };
+  }
+
+  const { data: rpcData, error: rpcError } = await db.rpc('consume_ai_quota', {
+    p_user_id: userId,
+    p_action_type: action,
+    p_ip_hash: ipHash,
+  });
+
+  if (rpcError || !rpcData || typeof rpcData !== 'object') {
+    console.error('Errore RPC atomica consume_ai_quota:', rpcError);
+    return {
+      allowed: false,
+      statusCode: 503,
+      isPro: false,
+      userId,
+      remaining: 0,
+      limit: 0,
+      errorMessage:
+        'Servizio di verifica quote AI temporaneamente non disponibile. Riprova tra qualche istante.',
+    };
+  }
+
+  const isPro = Boolean(rpcData.is_pro);
+  const allowed = Boolean(rpcData.allowed);
+  const tier = isPro ? PLAN_LIMITS.plus[action] : PLAN_LIMITS.free[action];
+  const limit = Number(rpcData.limit) || tier.max;
+  const remaining = Number(rpcData.remaining) || 0;
+
+  if (!allowed) {
+    return {
+      allowed: false,
+      statusCode: 429,
       isPro,
       userId,
-      remaining: Math.max(0, tier.max - (count + 1)),
-      limit: tier.max,
+      remaining: 0,
+      limit,
+      errorMessage: isPro
+        ? `Hai raggiunto il limite del piano FrigoChef Plus (${tier.label}).`
+        : `Hai raggiunto il limite del piano Free (${tier.label}). Passa a FrigoChef Plus per sbloccare fino a ${PLAN_LIMITS.plus[action].label}.`,
     };
-  });
+  }
+
+  return {
+    allowed: true,
+    statusCode: 200,
+    isPro,
+    userId,
+    remaining,
+    limit,
+  };
 }
