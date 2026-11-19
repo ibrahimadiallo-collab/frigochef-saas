@@ -39,12 +39,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // Controllo quote mensili Free (3/mese) vs Plus (50/mese)
+    // Controllo quote mensili Free (3/mese) vs Plus (50/mese) con autenticazione obbligatoria
     const quota = await verifyAndConsumeAIQuota(req, 'vision');
     if (!quota.allowed) {
       return NextResponse.json(
-        { error: quota.errorMessage, quotaExceeded: true, isPro: quota.isPro },
-        { status: 429 }
+        {
+          error: quota.errorMessage,
+          quotaExceeded: quota.statusCode === 429,
+          unauthenticated: quota.statusCode === 401,
+          isPro: quota.isPro,
+        },
+        { status: quota.statusCode || 429 }
       );
     }
 

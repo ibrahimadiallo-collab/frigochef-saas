@@ -24,12 +24,19 @@ const createSafeAdminClient = () => {
   }
 
   return {
+    rpc: async () => ({
+      data: null,
+      error: { code: 'PGRST202', message: 'Supabase Admin non configurato' },
+    }),
     from: () => ({
       select: () => ({
         eq: () => ({
           single: async () => ({ data: null, error: null }),
           order: () => ({ data: [], error: null }),
           gte: async () => ({ count: 0, data: [], error: null }),
+          eq: () => ({
+            gte: async () => ({ count: 0, data: [], error: null }),
+          }),
         }),
       }),
       upsert: async () => ({ data: null, error: null }),
@@ -65,7 +72,7 @@ export async function getUserFromRequest(req: Request) {
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
 
-    if (!token || token.length < 20) return null;
+    if (!token || token === 'demo-token' || token.length < 20) return null;
     if (!supabaseAdmin.auth) return null;
 
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);

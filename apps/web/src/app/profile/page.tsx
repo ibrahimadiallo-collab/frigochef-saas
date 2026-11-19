@@ -104,22 +104,40 @@ export default function ProfilePage() {
 
   const handleSavePreferences = async () => {
     setSavingPrefs(true);
+    setStatusMessage(null);
+    setPrefsSaved(false);
     localStorage.setItem('fc_diet_prefs', JSON.stringify(diets));
     localStorage.setItem('fc_allergens', JSON.stringify(allergens));
 
     try {
       const headers = await authHeader();
-      if (headers.Authorization) {
-        await fetch('/api/account', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ dietaryPreferences: diets, allergens }),
-        });
+      if (!headers.Authorization) {
+        setStatusMessage(
+          'Preferenze salvate solo su questo dispositivo. Accedi al tuo account per sincronizzarle nel tuo profilo cloud.'
+        );
+        return;
       }
+
+      const res = await fetch('/api/account', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ dietaryPreferences: diets, allergens }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(
+          data.error || 'Impossibile salvare le preferenze sul server. Riprova tra qualche istante.'
+        );
+        return;
+      }
+
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 2500);
     } catch {
-      // salvate comunque in localStorage
+      setStatusMessage(
+        'Errore di rete durante il salvataggio delle preferenze sul server.'
+      );
     } finally {
       setSavingPrefs(false);
     }
@@ -171,22 +189,22 @@ export default function ProfilePage() {
   };
 
   const handleExportData = async () => {
+    setStatusMessage(null);
     try {
       const headers = await authHeader();
-      let exportPayload: unknown = {
-        exportedAt: new Date().toISOString(),
-        localPreferences: { diets, allergens },
-        localPantry: JSON.parse(localStorage.getItem('fc_local_pantry') || '[]'),
-      };
-
-      if (headers.Authorization) {
-        const res = await fetch('/api/account?export=true', { headers });
-        if (res.ok) {
-          exportPayload = await res.json();
-        }
+      if (!headers.Authorization) {
+        setStatusMessage('Devi accedere al tuo account per esportare i tuoi dati dal server.');
+        return;
       }
 
-      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
+      const res = await fetch('/api/account?export=true', { headers });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(data.error || "Errore durante l'esportazione dei dati dal server.");
+        return;
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: 'application/json',
       });
       const url = URL.createObjectURL(blob);
@@ -196,22 +214,36 @@ export default function ProfilePage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setStatusMessage("Errore durante l'esportazione dei dati.");
+      setStatusMessage("Errore di rete durante l'esportazione dei dati.");
     }
   };
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
+    setStatusMessage(null);
     try {
       const headers = await authHeader();
-      if (headers.Authorization) {
-        await fetch('/api/account', { method: 'DELETE', headers });
+      if (!headers.Authorization) {
+        setStatusMessage('Devi accedere al tuo account per poterne richiedere la cancellazione.');
+        setDeleting(false);
+        return;
       }
+
+      const res = await fetch('/api/account', { method: 'DELETE', headers });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatusMessage(
+          data.error || "Impossibile completare l'eliminazione dell'account. Riprova o contatta il supporto."
+        );
+        setDeleting(false);
+        return;
+      }
+
       localStorage.clear();
       await supabase.auth.signOut();
       window.location.href = '/';
     } catch {
-      setStatusMessage("Errore durante l'eliminazione dell'account.");
+      setStatusMessage("Errore di rete durante l'eliminazione dell'account.");
       setDeleting(false);
     }
   };

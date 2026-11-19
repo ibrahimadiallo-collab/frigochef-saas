@@ -3,6 +3,7 @@
 import { useState, KeyboardEvent, useRef, ChangeEvent } from 'react';
 import { X, Camera, Loader2, Plus, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { authHeader } from '@/lib/supabase';
 
 interface AnalyzedItem {
   name: string;
@@ -72,9 +73,10 @@ export default function FridgeInput({ tags, setTags, onItemsAnalyzed }: FridgeIn
       reader.onloadend = async () => {
         try {
           const base64 = reader.result as string;
+          const headers = await authHeader();
           const res = await fetch('/api/vision', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...headers },
             body: JSON.stringify({ image: base64 }),
           });
           const data = await res.json();

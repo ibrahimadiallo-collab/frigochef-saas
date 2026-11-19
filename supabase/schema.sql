@@ -1,5 +1,6 @@
 -- =========================================================================
 -- FRIGOCHEF 2.0 — HARDENED PRODUCTION SCHEMA & ROW LEVEL SECURITY (RLS)
+-- Include ALTER TABLE idempotenti per aggiornare database già esistenti
 -- =========================================================================
 
 -- 1. PROFILES: Dati utente, preferenze alimentari e stato abbonamento
@@ -11,8 +12,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   is_pro BOOLEAN DEFAULT FALSE NOT NULL,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
-  subscription_status TEXT DEFAULT 'free' NOT NULL, -- 'free', 'trialing', 'active', 'past_due', 'canceled'
-  subscription_plan TEXT DEFAULT 'free' NOT NULL,   -- 'free', 'plus_monthly', 'plus_annual'
+  subscription_status TEXT DEFAULT 'free' NOT NULL,
+  subscription_plan TEXT DEFAULT 'free' NOT NULL,
   subscription_period_end TIMESTAMP WITH TIME ZONE,
   trial_used BOOLEAN DEFAULT FALSE NOT NULL,
   dietary_preferences JSONB DEFAULT '[]'::jsonb NOT NULL,
@@ -20,6 +21,17 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Migrazione sicura colonne se la tabella profiles esisteva già
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
+  ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'free' NOT NULL,
+  ADD COLUMN IF NOT EXISTS subscription_plan TEXT DEFAULT 'free' NOT NULL,
+  ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMP WITH TIME ZONE,
+  ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE NOT NULL,
+  ADD COLUMN IF NOT EXISTS dietary_preferences JSONB DEFAULT '[]'::jsonb NOT NULL,
+  ADD COLUMN IF NOT EXISTS allergens JSONB DEFAULT '[]'::jsonb NOT NULL,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -34,12 +46,11 @@ CREATE POLICY "Users can update their own profile"
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
--- REGOLA FONDAMENTALE (Fase 1.2):
--- Impedisce a un utente di diventare Pro o alterare campi di fatturazione dal browser.
 CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF current_setting('request.jwt.claim.role', true) = 'authenticated' THEN
+  IF COALESCE(current_setting('request.jwt.claim.role', true), '') = 'authenticated'
+     OR COALESCE(auth.role(), '') = 'authenticated' THEN
     IF NEW.is_pro IS DISTINCT FROM OLD.is_pro
        OR NEW.stripe_customer_id IS DISTINCT FROM OLD.stripe_customer_id
        OR NEW.stripe_subscription_id IS DISTINCT FROM OLD.stripe_subscription_id
@@ -48,6 +59,7 @@ BEGIN
        OR NEW.subscription_period_end IS DISTINCT FROM OLD.subscription_period_end
        OR NEW.trial_used IS DISTINCT FROM OLD.trial_used
        OR NEW.referral_code IS DISTINCT FROM OLD.referral_code
+       OR NEW.email IS DISTINCT FROM OLD.email
     THEN
       RAISE EXCEPTION 'Operazione non consentita: i campi di abbonamento possono essere modificati solo dal server di fatturazione.';
     END IF;
@@ -68,10 +80,13 @@ CREATE TABLE IF NOT EXISTS public.pantry (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   ingredients JSONB DEFAULT '[]'::jsonb NOT NULL,
-  items_detail JSONB DEFAULT '[]'::jsonb NOT NULL, -- [{name, quantity, location, purchaseDate, expiryDate}]
+  items_detail JSONB DEFAULT '[]'::jsonb NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   UNIQUE(user_id)
 );
+
+ALTER TABLE public.pantry
+  ADD COLUMN IF NOT EXISTS items_detail JSONB DEFAULT '[]'::jsonb NOT NULL;
 
 ALTER TABLE public.pantry ENABLE ROW LEVEL SECURITY;
 
@@ -168,33 +183,120 @@ CREATE POLICY "Users can manage their own shopping list"
   WITH CHECK (auth.uid() = user_id);
 
 
--- 7. AI USAGE LOGS: Contatori di utilizzo AI (IMMUTABILI dagli utenti per evitare reset limiti Free)
+-- 7. AI USAGE LOGS & FUNZIONE ATOMICA DI QUOTA (CRITICO 1)
 CREATE TABLE IF NOT EXISTS public.ai_usage_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   ip_hash TEXT,
-  action_type TEXT NOT NULL, -- 'recipe', 'vision', 'meal_plan'
+  action_type TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_action_date
+  ON public.ai_usage_logs (user_id, action_type, created_at);
+
 ALTER TABLE public.ai_usage_logs ENABLE ROW LEVEL SECURITY;
 
--- Gli utenti possono solo leggere i propri contatori, MAI modificarli o cancellarli
 DROP POLICY IF EXISTS "Users can view their own AI usage" ON public.ai_usage_logs;
 CREATE POLICY "Users can view their own AI usage"
   ON public.ai_usage_logs FOR SELECT
   USING (auth.uid() = user_id);
 
+CREATE OR REPLACE FUNCTION public.consume_ai_quota(
+  p_user_id UUID,
+  p_action_type TEXT,
+  p_ip_hash TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_is_pro BOOLEAN := FALSE;
+  v_period_end TIMESTAMP WITH TIME ZONE;
+  v_since TIMESTAMP WITH TIME ZONE;
+  v_limit INTEGER;
+  v_used INTEGER;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'allowed', false,
+      'is_pro', false,
+      'used', 0,
+      'limit', 0,
+      'remaining', 0,
+      'error_code', 'UNAUTHENTICATED'
+    );
+  END IF;
 
--- 8. STRIPE WEBHOOK EVENTS: Tabella di idempotenza (accessibile solo da service_role)
+  PERFORM pg_advisory_xact_lock(hashtext(p_user_id::text || ':' || p_action_type));
+
+  SELECT is_pro, subscription_period_end
+  INTO v_is_pro, v_period_end
+  FROM public.profiles
+  WHERE id = p_user_id;
+
+  IF v_is_pro IS TRUE AND v_period_end IS NOT NULL AND v_period_end <= timezone('utc'::text, now()) THEN
+    v_is_pro := FALSE;
+  END IF;
+  v_is_pro := COALESCE(v_is_pro, FALSE);
+
+  IF p_action_type = 'recipe' THEN
+    v_since := date_trunc('day', timezone('utc'::text, now()));
+    v_limit := CASE WHEN v_is_pro THEN 50 ELSE 3 END;
+  ELSIF p_action_type = 'vision' THEN
+    v_since := date_trunc('month', timezone('utc'::text, now()));
+    v_limit := CASE WHEN v_is_pro THEN 50 ELSE 3 END;
+  ELSIF p_action_type = 'meal_plan' THEN
+    v_since := date_trunc('month', timezone('utc'::text, now()));
+    v_limit := CASE WHEN v_is_pro THEN 4 ELSE 1 END;
+  ELSE
+    RAISE EXCEPTION 'Tipo azione AI non valido: %', p_action_type;
+  END IF;
+
+  SELECT COUNT(*)::INTEGER
+  INTO v_used
+  FROM public.ai_usage_logs
+  WHERE user_id = p_user_id
+    AND action_type = p_action_type
+    AND created_at >= v_since;
+
+  IF v_used >= v_limit THEN
+    RETURN jsonb_build_object(
+      'allowed', false,
+      'is_pro', v_is_pro,
+      'used', v_used,
+      'limit', v_limit,
+      'remaining', 0,
+      'error_code', 'QUOTA_EXCEEDED'
+    );
+  END IF;
+
+  INSERT INTO public.ai_usage_logs (user_id, ip_hash, action_type)
+  VALUES (p_user_id, p_ip_hash, p_action_type);
+
+  RETURN jsonb_build_object(
+    'allowed', true,
+    'is_pro', v_is_pro,
+    'used', v_used + 1,
+    'limit', v_limit,
+    'remaining', GREATEST(0, v_limit - (v_used + 1))
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE EXECUTE ON FUNCTION public.consume_ai_quota(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+
+
+-- 8. STRIPE WEBHOOK EVENTS: Tabella di idempotenza atomica (CRITICO 2)
 CREATE TABLE IF NOT EXISTS public.stripe_webhook_events (
   event_id TEXT PRIMARY KEY,
   event_type TEXT NOT NULL,
+  status TEXT DEFAULT 'processing' NOT NULL,
   processed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE public.stripe_webhook_events
+  ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'processing' NOT NULL;
+
 ALTER TABLE public.stripe_webhook_events ENABLE ROW LEVEL SECURITY;
--- Nessuna policy client: solo service_role può leggere/scrivere gli eventi Stripe
 
 
 -- 9. CREAZIONE AUTOMATICA PROFILO ALLA REGISTRAZIONE

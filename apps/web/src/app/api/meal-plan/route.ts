@@ -34,12 +34,17 @@ export async function POST(req: Request) {
       ? body.allergens.filter((x: unknown): x is string => typeof x === 'string').slice(0, 10)
       : [];
 
-    // Controllo quote mensili Free (1/mese) vs Plus (4/mese)
+    // Controllo quote mensili Free (1/mese) vs Plus (4/mese) con autenticazione obbligatoria
     const quota = await verifyAndConsumeAIQuota(req, 'meal_plan');
     if (!quota.allowed) {
       return NextResponse.json(
-        { error: quota.errorMessage, quotaExceeded: true, isPro: quota.isPro },
-        { status: 429 }
+        {
+          error: quota.errorMessage,
+          quotaExceeded: quota.statusCode === 429,
+          unauthenticated: quota.statusCode === 401,
+          isPro: quota.isPro,
+        },
+        { status: quota.statusCode || 429 }
       );
     }
 

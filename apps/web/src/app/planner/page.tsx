@@ -58,9 +58,10 @@ export default function PlannerPage() {
     setError(null);
 
     try {
+      const headers = await authHeader();
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ ingredients: pantryTags.join(', ') }),
       });
       const data = await res.json();
