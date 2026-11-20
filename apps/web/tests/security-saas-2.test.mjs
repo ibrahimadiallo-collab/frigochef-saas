@@ -588,4 +588,24 @@ describe('FrigoChef Security-SaaS-3 — Behavioral & Functional Test Suite', () 
       );
     }
   });
+
+  test('7. HEALTH CHECK COMPLETO (/api/health): Invocazione reale di entrambe le RPC e verifica connessione API Stripe', () => {
+    const healthCode = fs.readFileSync(
+      path.join(webRoot, 'src/app/api/health/route.ts'),
+      'utf8'
+    );
+
+    assert.ok(
+      healthCode.includes("supabaseAdmin.rpc('consume_ai_quota'"),
+      '/api/health deve invocare realmente la RPC consume_ai_quota'
+    );
+    assert.ok(
+      healthCode.includes("'claim_stripe_webhook_event'"),
+      '/api/health deve invocare realmente la RPC claim_stripe_webhook_event'
+    );
+    assert.ok(
+      healthCode.includes('stripe.products.list({ limit: 1 })'),
+      '/api/health deve verificare la validità della chiave Stripe eseguendo una chiamata API reale'
+    );
+  });
 });

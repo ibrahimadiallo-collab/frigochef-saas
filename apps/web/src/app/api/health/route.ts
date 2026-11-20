@@ -1,20 +1,22 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { stripe } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/health
- * Endpoint diagnostico di prontezza produzione (Readiness Check):
- * Verifica in tempo reale (senza mai esporre chiavi segrete) se:
- * 1. Il database Supabase di produzione è attivo e raggiungibile.
- * 2. Le nuove colonne della migrazione `security_saas_2` esistono su `public.profiles`.
- * 3. La funzione RPC atomica `public.consume_ai_quota` è installata.
- * 4. La funzione RPC atomica `public.claim_stripe_webhook_event` è installata.
- * 5. Le variabili Stripe e Gemini sono configurate nell'ambiente Vercel.
+ * Endpoint diagnostico di collaudo e prontezza produzione (Readiness Check v2):
+ * 1. Verifica connessione reale a Supabase e presenza delle colonne migrate su `public.profiles`.
+ * 2. Invoca realmente la funzione RPC atomica `public.consume_ai_quota` in modalità dry-run (`p_user_id: null`).
+ * 3. Invoca realmente la funzione RPC atomica `public.claim_stripe_webhook_event` in modalità dry-run/probe
+ *    e verifica anche le colonne `status, locked_at` sulla tabella `stripe_webhook_events`.
+ * 4. Verifica non solo la presenza delle variabili Stripe, ma esegue una chiamata autenticata
+ *    alle API Stripe (`stripe.products.list({ limit: 1 })`) per certificare che `STRIPE_SECRET_KEY`
+ *    sia valida e funzionante (distinguendo Test Mode da Live Mode).
  */
 export async function GET() {
-  const checks: Record<string, { ok: boolean; detail: string }> = {
+  const checks: Record<string, { ok: boolean; mode?: string; detail: string }> = {
     env_supabase: {
       ok: Boolean(
         process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -29,12 +31,9 @@ export async function GET() {
       ok: Boolean(process.env.GEMINI_API_KEY),
       detail: process.env.GEMINI_API_KEY ? 'GEMINI_API_KEY configurata' : 'GEMINI_API_KEY mancante',
     },
-    env_stripe: {
-      ok: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
-      detail:
-        process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-          ? 'STRIPE_SECRET_KEY e STRIPE_WEBHOOK_SECRET configurate'
-          : 'Mancano STRIPE_SECRET_KEY e/o STRIPE_WEBHOOK_SECRET su Vercel',
+    stripe_api_connection: {
+      ok: false,
+      detail: 'Non verificato',
     },
     db_profiles_migration: {
       ok: false,
@@ -50,7 +49,47 @@ export async function GET() {
     },
   };
 
-  // 1. Verifica raggiungibilità DB e colonne migrate su public.profiles
+  // 1. PROBLEMA B — Verifica reale della validità delle credenziali Stripe e comunicazione API
+  const stripeKey = process.env.STRIPE_SECRET_KEY || '';
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+  const stripeMode = stripeKey.startsWith('sk_live_')
+    ? 'live'
+    : stripeKey.startsWith('sk_test_')
+    ? 'test'
+    : 'unconfigured';
+
+  if (!stripe || !stripeKey) {
+    checks.stripe_api_connection = {
+      ok: false,
+      mode: 'unconfigured',
+      detail: 'STRIPE_SECRET_KEY mancante nelle variabili ambiente',
+    };
+  } else if (!webhookSecret || !webhookSecret.startsWith('whsec_')) {
+    checks.stripe_api_connection = {
+      ok: false,
+      mode: stripeMode,
+      detail: 'STRIPE_SECRET_KEY presente, ma STRIPE_WEBHOOK_SECRET mancante o non valida (deve iniziare con whsec_)',
+    };
+  } else {
+    try {
+      await stripe.products.list({ limit: 1 });
+      checks.stripe_api_connection = {
+        ok: true,
+        mode: stripeMode,
+        detail: `Connessione API Stripe autenticata con successo (${stripeMode.toUpperCase()} MODE) e STRIPE_WEBHOOK_SECRET configurata`,
+      };
+    } catch (e) {
+      checks.stripe_api_connection = {
+        ok: false,
+        mode: stripeMode,
+        detail: `Credenziali Stripe rifiutate o errore di rete: ${
+          e instanceof Error ? e.message : 'errore sconosciuto'
+        }`,
+      };
+    }
+  }
+
+  // 2. Verifica raggiungibilità DB e colonne migrate su public.profiles
   try {
     const { error: profErr } = await supabaseAdmin
       .from('profiles')
@@ -73,13 +112,13 @@ export async function GET() {
   } catch (e) {
     checks.db_profiles_migration = {
       ok: false,
-      detail: `Database Supabase non raggiungibile (progetto in pausa?): ${
+      detail: `Database Supabase non raggiungibile: ${
         e instanceof Error ? e.message : 'errore di rete'
       }`,
     };
   }
 
-  // 2. Verifica presenza RPC atomica consume_ai_quota (chiamata dry-run con p_user_id = null che non inserisce log)
+  // 3. Verifica esecuzione reale RPC atomica consume_ai_quota (dry-run con p_user_id: null)
   try {
     if (typeof supabaseAdmin.rpc === 'function') {
       const { data, error } = await supabaseAdmin.rpc('consume_ai_quota', {
@@ -91,46 +130,69 @@ export async function GET() {
       if (!error && data && data.error_code === 'UNAUTHENTICATED') {
         checks.rpc_consume_ai_quota = {
           ok: true,
-          detail: 'RPC atomica consume_ai_quota installata e operativa',
+          detail: 'RPC atomica consume_ai_quota invocata ed operativa',
         };
       } else {
         checks.rpc_consume_ai_quota = {
           ok: false,
           detail: error
-            ? `RPC consume_ai_quota non trovata o in errore (${error.code}): esegui la migrazione SQL su Supabase`
-            : 'Risposta inattesa da consume_ai_quota',
+            ? `RPC consume_ai_quota non disponibile (${error.code}): ${error.message}`
+            : 'Risposta inattesa dalla RPC consume_ai_quota',
         };
       }
     }
   } catch (e) {
     checks.rpc_consume_ai_quota = {
       ok: false,
-      detail: e instanceof Error ? e.message : 'Errore invocazione RPC',
+      detail: e instanceof Error ? e.message : 'Errore invocazione consume_ai_quota',
     };
   }
 
-  // 3. Verifica presenza tabella stripe_webhook_events con colonna locked_at
+  // 4. PROBLEMA A — Verifica esecuzione reale della RPC atomica claim_stripe_webhook_event + schema tabella
   try {
-    const { error: whErr } = await supabaseAdmin
+    const { error: tableErr } = await supabaseAdmin
       .from('stripe_webhook_events')
       .select('event_id, status, locked_at')
       .limit(1);
 
-    if (!whErr) {
-      checks.rpc_claim_stripe_webhook = {
-        ok: true,
-        detail: 'Tabella stripe_webhook_events con locked_at pronta',
-      };
-    } else {
+    if (tableErr) {
       checks.rpc_claim_stripe_webhook = {
         ok: false,
-        detail: `Tabella stripe_webhook_events non aggiornata (${whErr.code}): esegui 20261120000002_security_saas_3.sql`,
+        detail: `Tabella stripe_webhook_events non pronta (${tableErr.code}): ${tableErr.message}`,
       };
+    } else if (typeof supabaseAdmin.rpc === 'function') {
+      // Invoca realmente la funzione RPC claim_stripe_webhook_event con p_event_id = '' (dry-run senza scrittura)
+      const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
+        'claim_stripe_webhook_event',
+        {
+          p_event_id: '',
+          p_event_type: 'healthcheck.probe',
+          p_lock_timeout_seconds: 300,
+        }
+      );
+
+      if (!rpcErr && rpcData && typeof rpcData === 'object') {
+        // Se la funzione ha già il ramo HEALTHCHECK_OK non scrive nulla; se fosse la versione precedente, pulisce la riga ''
+        if ((rpcData as { action?: string }).action !== 'HEALTHCHECK_OK') {
+          await supabaseAdmin.from('stripe_webhook_events').delete().eq('event_id', '');
+        }
+        checks.rpc_claim_stripe_webhook = {
+          ok: true,
+          detail: 'RPC atomica claim_stripe_webhook_event invocata ed operativa',
+        };
+      } else {
+        checks.rpc_claim_stripe_webhook = {
+          ok: false,
+          detail: rpcErr
+            ? `RPC claim_stripe_webhook_event non trovata o in errore (${rpcErr.code}): ${rpcErr.message}`
+            : 'Risposta inattesa dalla RPC claim_stripe_webhook_event',
+        };
+      }
     }
   } catch (e) {
     checks.rpc_claim_stripe_webhook = {
       ok: false,
-      detail: e instanceof Error ? e.message : 'Errore verifica stripe_webhook_events',
+      detail: e instanceof Error ? e.message : 'Errore verifica claim_stripe_webhook_event',
     };
   }
 

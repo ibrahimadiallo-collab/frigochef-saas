@@ -41,6 +41,10 @@ DECLARE
   v_now TIMESTAMP WITH TIME ZONE := timezone('utc'::text, now());
   v_timeout_threshold TIMESTAMP WITH TIME ZONE := v_now - make_interval(secs => COALESCE(p_lock_timeout_seconds, 300));
 BEGIN
+  IF p_event_id IS NULL OR BTRIM(p_event_id) = '' THEN
+    RETURN jsonb_build_object('action', 'HEALTHCHECK_OK', 'status', 'ready');
+  END IF;
+
   -- Lock transazionale esclusivo sull'ID evento Stripe
   PERFORM pg_advisory_xact_lock(hashtext('stripe_evt:' || p_event_id));
 
