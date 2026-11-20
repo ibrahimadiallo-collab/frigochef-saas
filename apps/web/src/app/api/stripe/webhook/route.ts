@@ -9,119 +9,56 @@ export const dynamic = 'force-dynamic';
 export const WEBHOOK_LOCK_TIMEOUT_SECONDS = 300;
 
 /**
- * CRITICO 1 — Gestore atomico dell'evento Stripe con recupero degli eventi bloccati (stale lock recovery):
+ * Gestore atomico dell'evento Stripe con recupero degli eventi bloccati (stale lock recovery):
+ * - Utilizza ESCLUSIVAMENTE la funzione RPC atomica PostgreSQL `public.claim_stripe_webhook_event`
+ *   (protetta da `pg_advisory_xact_lock`), eliminando qualsiasi percorso alternativo non atomico.
  * - 'ALREADY_COMPLETED' -> 200 { received: true, duplicate: true }
  * - 'IN_PROGRESS' (lock attivo < 5 min) -> 409 Conflict (Stripe riproverà se la prima istanza dovesse fallire)
  * - 'CLAIMED' o 'RECLAIMED' (lock scaduto >= 5 min) -> Elabora l'evento, verifica ogni errore DB e marca 'completed'
+ * - Se la RPC non è disponibile o restituisce errore -> fail-closed 500 (Stripe riproverà senza rischio di race condition)
  */
 export async function processStripeWebhookEvent(
   event: Stripe.Event,
   db: typeof supabaseAdmin = supabaseAdmin,
   nowMs: number = Date.now()
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const nowISO = new Date(nowMs).toISOString();
-  let lockAcquired = false;
-
-  // 1. Tentativo primario: funzione RPC atomica PostgreSQL `claim_stripe_webhook_event`
-  if (typeof db.rpc === 'function') {
-    const { data: rpcClaim, error: rpcError } = await db.rpc('claim_stripe_webhook_event', {
-      p_event_id: event.id,
-      p_event_type: event.type,
-      p_lock_timeout_seconds: WEBHOOK_LOCK_TIMEOUT_SECONDS,
-    });
-
-    if (!rpcError && rpcClaim && typeof rpcClaim === 'object') {
-      const action = (rpcClaim as { action?: string }).action;
-      if (action === 'ALREADY_COMPLETED') {
-        return { status: 200, body: { received: true, duplicate: true } };
-      }
-      if (action === 'IN_PROGRESS') {
-        // IMPORTANTE: non restituire 200 per un evento ancora in elaborazione, altrimenti Stripe non riproverà mai se l'altra istanza crasha
-        return {
-          status: 409,
-          body: { error: 'Event is currently being processed by an active worker', retryable: true },
-        };
-      }
-      if (action === 'CLAIMED' || action === 'RECLAIMED') {
-        lockAcquired = true;
-      }
-    } else if (rpcError && rpcError.code !== 'PGRST202' && rpcError.code !== '42883') {
-      console.error('Errore RPC claim_stripe_webhook_event:', rpcError);
-      return {
-        status: 500,
-        body: { error: 'Database unavailable for webhook idempotency lock' },
-      };
-    }
+  if (typeof db.rpc !== 'function') {
+    return {
+      status: 500,
+      body: { error: 'Webhook idempotency RPC not configured on database client' },
+    };
   }
 
-  // 2. Fallback SQL atomico con scadenza del lock (se la RPC non è ancora stata applicata)
-  if (!lockAcquired) {
-    const { error: claimError } = await db.from('stripe_webhook_events').insert([
-      {
-        event_id: event.id,
-        event_type: event.type,
-        status: 'processing',
-        locked_at: nowISO,
-        processed_at: nowISO,
-      },
-    ]);
+  // 1. Acquisizione / Recupero ATOMICO tramite RPC PostgreSQL `claim_stripe_webhook_event`
+  const { data: rpcClaim, error: rpcError } = await db.rpc('claim_stripe_webhook_event', {
+    p_event_id: event.id,
+    p_event_type: event.type,
+    p_lock_timeout_seconds: WEBHOOK_LOCK_TIMEOUT_SECONDS,
+  });
 
-    if (claimError) {
-      if (claimError.code === '23505') {
-        const { data: existing, error: readErr } = await db
-          .from('stripe_webhook_events')
-          .select('status, locked_at, processed_at')
-          .eq('event_id', event.id)
-          .single();
+  if (rpcError || !rpcClaim || typeof rpcClaim !== 'object') {
+    console.error('Errore RPC atomica claim_stripe_webhook_event:', rpcError);
+    return {
+      status: 500,
+      body: { error: 'Database unavailable for atomic webhook idempotency lock' },
+    };
+  }
 
-        if (readErr || !existing) {
-          return {
-            status: 500,
-            body: { error: 'Unable to read existing webhook lock state' },
-          };
-        }
-
-        if (existing.status === 'completed') {
-          return { status: 200, body: { received: true, duplicate: true } };
-        }
-
-        const lockTimestamp = existing.locked_at || existing.processed_at;
-        const lockAgeMs = lockTimestamp ? nowMs - new Date(lockTimestamp).getTime() : Infinity;
-
-        if (lockAgeMs < WEBHOOK_LOCK_TIMEOUT_SECONDS * 1000) {
-          return {
-            status: 409,
-            body: { error: 'Event is currently being processed by an active worker', retryable: true },
-          };
-        }
-
-        // Lock scaduto (>= 5 minuti): recupera atomicamente l'evento bloccato
-        const { error: reclaimError } = await db
-          .from('stripe_webhook_events')
-          .update({
-            status: 'processing',
-            locked_at: nowISO,
-            processed_at: nowISO,
-          })
-          .eq('event_id', event.id);
-
-        if (reclaimError) {
-          return {
-            status: 500,
-            body: { error: 'Failed to reclaim stale webhook lock' },
-          };
-        }
-        lockAcquired = true;
-      } else {
-        console.error('Impossibile registrare lock idempotenza Stripe:', claimError);
-        return {
-          status: 500,
-          body: { error: 'Database unavailable for webhook idempotency check' },
-        };
-      }
-    } else {
-      lockAcquired = true;
-    }
+  const action = (rpcClaim as { action?: string }).action;
+  if (action === 'ALREADY_COMPLETED') {
+    return { status: 200, body: { received: true, duplicate: true } };
+  }
+  if (action === 'IN_PROGRESS') {
+    return {
+      status: 409,
+      body: { error: 'Event is currently being processed by an active worker', retryable: true },
+    };
+  }
+  if (action !== 'CLAIMED' && action !== 'RECLAIMED') {
+    return {
+      status: 500,
+      body: { error: `Unexpected webhook lock state: ${String(action)}` },
+    };
   }
 
   try {

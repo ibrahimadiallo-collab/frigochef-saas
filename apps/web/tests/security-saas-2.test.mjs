@@ -351,8 +351,12 @@ describe('FrigoChef Security-SaaS-3 — Behavioral & Functional Test Suite', () 
     assert.equal(db.tables.ai_usage_logs.length, 3, 'Nel DB devono risultare esattamente 3 consumi registrati');
   });
 
-  test('2. CRITICO 2 (FALLBACK DISABILITATO): Se la RPC atomica non è disponibile, le quote AI vanno in fail-closed (503) senza fallback non atomico', () => {
+  test('2. CRITICO 2 (FALLBACK DISABILITATI): Sia quotas.ts sia webhook/route.ts usano esclusivamente RPC atomiche senza percorsi alternativi non atomici', () => {
     const quotasCode = fs.readFileSync(path.join(webRoot, 'src/lib/quotas.ts'), 'utf8');
+    const webhookCode = fs.readFileSync(
+      path.join(webRoot, 'src/app/api/stripe/webhook/route.ts'),
+      'utf8'
+    );
 
     assert.ok(
       !quotasCode.includes(".from('ai_usage_logs')"),
@@ -365,6 +369,14 @@ describe('FrigoChef Security-SaaS-3 — Behavioral & Functional Test Suite', () 
     assert.ok(
       quotasCode.includes("db.rpc('consume_ai_quota'"),
       'quotas.ts deve usare esclusivamente la RPC atomica consume_ai_quota'
+    );
+    assert.ok(
+      !webhookCode.includes("claimError.code === '23505'"),
+      'webhook/route.ts non deve contenere il percorso alternativo non atomico di INSERT/UPDATE per il claim del lock'
+    );
+    assert.ok(
+      webhookCode.includes("db.rpc('claim_stripe_webhook_event'"),
+      'webhook/route.ts deve usare esclusivamente la RPC atomica claim_stripe_webhook_event per acquisire il lock'
     );
   });
 
