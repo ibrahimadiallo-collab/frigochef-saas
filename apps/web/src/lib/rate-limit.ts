@@ -1,15 +1,34 @@
 import crypto from 'node:crypto';
 
 /**
- * ALTO 3 — Estrazione IP da header proxy fidati (Vercel Edge) e pseudonimizzazione SHA-256.
+ * Passo 4 P1 — Estrazione IP da header proxy fidati (Vercel Edge) e HMAC-SHA256 con segreto dedicato.
  *
- * Finalità e Conservazione (GDPR Art. 5 & 32):
- * - L'indirizzo IP in chiaro NON viene mai salvato nel database.
- * - Viene estratto prioritariamente da `x-vercel-forwarded-for` (header sovrascritto dal proxy edge
- *   di Vercel e non falsificabile dal client) e immediatamente convertito in un digest SHA-256
- *   salato e troncato a 32 caratteri esadecimali, usato esclusivamente per prevenire abusi API.
+ * Sicurezza e GDPR (Art. 5 & 32):
+ * - Usa `crypto.createHmac('sha256', secret)` con `process.env.IP_HASH_SECRET`.
+ * - Non usa mai `.slice(0, 16)` su chiavi JWT (che avrebbero prefisso costante `eyJhbGciOiJIUzI1`).
+ * - Se `IP_HASH_SECRET` non è definito in sviluppo, deriva una chiave a 256 bit dall'intera
+ *   `SUPABASE_SERVICE_ROLE_KEY` tramite SHA-256 (sfruttando tutta l'entropia della firma finale).
+ * - I record in `ai_usage_logs.ip_hash` vengono automaticamente azzerati (`NULL`) dopo 30 giorni.
  */
-export function getTrustedClientIpHash(req: Request): string {
+export function resolveIpHmacSecret(
+  customSecret?: string,
+  env: NodeJS.ProcessEnv = process.env
+): Buffer {
+  const explicit = (customSecret || env.IP_HASH_SECRET || '').trim();
+  if (explicit.length >= 16) {
+    return Buffer.from(explicit, 'utf8');
+  }
+
+  const fullServiceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (fullServiceKey.length >= 20) {
+    return crypto.createHash('sha256').update(`fc-hmac-key-v2:${fullServiceKey}`).digest();
+  }
+
+  // Fallback esclusivo per test unitari locali privi di variabili env
+  return crypto.createHash('sha256').update('fc-local-dev-ephemeral-hmac-key').digest();
+}
+
+export function getTrustedClientIpHash(req: Request, customSecret?: string): string {
   const vercelIp = req.headers.get('x-vercel-forwarded-for');
   const realIp = req.headers.get('x-real-ip');
   const forwardedFor = req.headers.get('x-forwarded-for');
@@ -20,16 +39,18 @@ export function getTrustedClientIpHash(req: Request): string {
   } else if (realIp) {
     rawIp = realIp.trim();
   } else if (forwardedFor) {
-    const hops = forwardedFor.split(',').map((s) => s.trim()).filter(Boolean);
+    const hops = forwardedFor
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     rawIp = hops[hops.length - 1] || '0.0.0.0';
   }
 
-  const salt = process.env.SUPABASE_SERVICE_ROLE_KEY?.slice(0, 16) || 'frigochef-ip-salt-2026';
+  const secretKey = resolveIpHmacSecret(customSecret);
   return crypto
-    .createHash('sha256')
-    .update(`fc-ip-v1:${salt}:${rawIp}`)
-    .digest('hex')
-    .slice(0, 32);
+    .createHmac('sha256', secretKey)
+    .update(`fc-ip-v2:${rawIp}`)
+    .digest('hex');
 }
 
 interface RateRecord {

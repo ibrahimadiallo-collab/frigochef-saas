@@ -104,7 +104,7 @@ export default function PlannerPage() {
               </h1>
             </div>
             <p style={{ fontSize: 14, color: 'var(--fc-sage)', maxWidth: 460 }}>
-              L'AI crea un piano di 7 giorni bilanciato usando gli ingredienti che hai già a casa,
+              L&apos;AI crea un piano di 7 giorni bilanciato usando gli ingredienti che hai già a casa,
               riducendo gli sprechi e ottimizzando gli acquisti.
             </p>
           </div>
@@ -138,7 +138,7 @@ export default function PlannerPage() {
             ) : (
               <>
                 <Sparkles size={18} />
-                Genera Piano con l'AI
+                Genera Piano con l&apos;AI
               </>
             )}
           </button>

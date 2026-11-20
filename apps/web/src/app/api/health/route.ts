@@ -1,124 +1,89 @@
 import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { stripe } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
+function isAuthorizedDiagnosticsRequest(req: Request): boolean {
+  const configuredSecret = process.env.HEALTHCHECK_SECRET?.trim();
+  if (!configuredSecret || configuredSecret.length < 16) {
+    return false;
+  }
+
+  const headerSecret =
+    req.headers.get('x-health-secret')?.trim() ||
+    (req.headers.get('authorization')?.startsWith('Bearer ')
+      ? req.headers.get('authorization')!.slice(7).trim()
+      : '');
+
+  if (!headerSecret) return false;
+
+  const bufA = Buffer.from(configuredSecret, 'utf8');
+  const bufB = Buffer.from(headerSecret, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 /**
  * GET /api/health
- * Endpoint diagnostico di collaudo e prontezza produzione (Readiness Check v2):
- * 1. Verifica connessione reale a Supabase e presenza delle colonne migrate su `public.profiles`.
- * 2. Invoca realmente la funzione RPC atomica `public.consume_ai_quota` in modalità dry-run (`p_user_id: null`).
- * 3. Invoca realmente la funzione RPC atomica `public.claim_stripe_webhook_event` in modalità dry-run/probe
- *    e verifica anche le colonne `status, locked_at` sulla tabella `stripe_webhook_events`.
- * 4. Verifica non solo la presenza delle variabili Stripe, ma esegue una chiamata autenticata
- *    alle API Stripe (`stripe.products.list({ limit: 1 })`) per certificare che `STRIPE_SECRET_KEY`
- *    sia valida e funzionante (distinguendo Test Mode da Live Mode).
+ * Passo 2 P0 — Endpoint di salute protetto:
+ * - In pubblico (senza HEALTHCHECK_SECRET): restituisce SOLO `{ ok: true | false }`,
+ *   senza mai chiamare Stripe, senza mai scrivere sul DB e senza mai esporre `e.message`,
+ *   nomi di tabelle/colonne o la modalità Stripe (live/test).
+ * - Con `x-health-secret` / `Authorization: Bearer <HEALTHCHECK_SECRET>`: esegue la verifica
+ *   diagnostica read-only delle RPC per l'operatore.
  */
-export async function GET() {
-  const checks: Record<string, { ok: boolean; mode?: string; detail: string }> = {
+export async function GET(req: Request) {
+  const envOk = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.GEMINI_API_KEY
+  );
+
+  const authorized = isAuthorizedDiagnosticsRequest(req);
+
+  // Risposta pubblica minimale: nessuna chiamata a Stripe, nessuna query pesante, nessun dettaglio interno
+  if (!authorized) {
+    return NextResponse.json({ ok: envOk }, { status: envOk ? 200 : 503 });
+  }
+
+  const checks: Record<string, { ok: boolean }> = {
     env_supabase: {
       ok: Boolean(
         process.env.NEXT_PUBLIC_SUPABASE_URL &&
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
           process.env.SUPABASE_SERVICE_ROLE_KEY
       ),
-      detail: process.env.NEXT_PUBLIC_SUPABASE_URL
-        ? 'Variabili Supabase presenti'
-        : 'Variabili Supabase mancanti',
     },
     env_gemini: {
       ok: Boolean(process.env.GEMINI_API_KEY),
-      detail: process.env.GEMINI_API_KEY ? 'GEMINI_API_KEY configurata' : 'GEMINI_API_KEY mancante',
     },
-    stripe_api_connection: {
-      ok: false,
-      detail: 'Non verificato',
+    env_stripe: {
+      ok: Boolean(
+        process.env.STRIPE_SECRET_KEY &&
+          process.env.STRIPE_WEBHOOK_SECRET &&
+          process.env.STRIPE_WEBHOOK_SECRET.startsWith('whsec_')
+      ),
     },
-    db_profiles_migration: {
-      ok: false,
-      detail: 'Non verificato',
-    },
-    rpc_consume_ai_quota: {
-      ok: false,
-      detail: 'Non verificato',
-    },
-    rpc_claim_stripe_webhook: {
-      ok: false,
-      detail: 'Non verificato',
-    },
+    db_profiles_migration: { ok: false },
+    rpc_consume_ai_quota: { ok: false },
+    rpc_claim_stripe_webhook: { ok: false },
   };
 
-  // 1. PROBLEMA B — Verifica reale della validità delle credenziali Stripe e comunicazione API
-  const stripeKey = process.env.STRIPE_SECRET_KEY || '';
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
-  const stripeMode = stripeKey.startsWith('sk_live_')
-    ? 'live'
-    : stripeKey.startsWith('sk_test_')
-    ? 'test'
-    : 'unconfigured';
-
-  if (!stripe || !stripeKey) {
-    checks.stripe_api_connection = {
-      ok: false,
-      mode: 'unconfigured',
-      detail: 'STRIPE_SECRET_KEY mancante nelle variabili ambiente',
-    };
-  } else if (!webhookSecret || !webhookSecret.startsWith('whsec_')) {
-    checks.stripe_api_connection = {
-      ok: false,
-      mode: stripeMode,
-      detail: 'STRIPE_SECRET_KEY presente, ma STRIPE_WEBHOOK_SECRET mancante o non valida (deve iniziare con whsec_)',
-    };
-  } else {
-    try {
-      await stripe.products.list({ limit: 1 });
-      checks.stripe_api_connection = {
-        ok: true,
-        mode: stripeMode,
-        detail: `Connessione API Stripe autenticata con successo (${stripeMode.toUpperCase()} MODE) e STRIPE_WEBHOOK_SECRET configurata`,
-      };
-    } catch (e) {
-      checks.stripe_api_connection = {
-        ok: false,
-        mode: stripeMode,
-        detail: `Credenziali Stripe rifiutate o errore di rete: ${
-          e instanceof Error ? e.message : 'errore sconosciuto'
-        }`,
-      };
-    }
-  }
-
-  // 2. Verifica raggiungibilità DB e colonne migrate su public.profiles
   try {
     const { error: profErr } = await supabaseAdmin
       .from('profiles')
       .select(
-        'id, is_pro, stripe_subscription_id, subscription_status, subscription_plan, trial_used, dietary_preferences, allergens'
+        'id, is_pro, stripe_subscription_id, subscription_status, subscription_plan, trial_used, dietary_preferences, allergens, stripe_last_event_created'
       )
       .limit(1);
-
-    if (!profErr) {
-      checks.db_profiles_migration = {
-        ok: true,
-        detail: 'Tabella profiles raggiungibile e colonne migrazione presenti',
-      };
-    } else {
-      checks.db_profiles_migration = {
-        ok: false,
-        detail: `Errore schema profiles (${profErr.code || 'network'}): ${profErr.message}`,
-      };
-    }
-  } catch (e) {
-    checks.db_profiles_migration = {
-      ok: false,
-      detail: `Database Supabase non raggiungibile: ${
-        e instanceof Error ? e.message : 'errore di rete'
-      }`,
-    };
+    checks.db_profiles_migration.ok = !profErr;
+  } catch {
+    checks.db_profiles_migration.ok = false;
   }
 
-  // 3. Verifica esecuzione reale RPC atomica consume_ai_quota (dry-run con p_user_id: null)
   try {
     if (typeof supabaseAdmin.rpc === 'function') {
       const { data, error } = await supabaseAdmin.rpc('consume_ai_quota', {
@@ -126,82 +91,35 @@ export async function GET() {
         p_action_type: 'recipe',
         p_ip_hash: 'healthcheck',
       });
-
-      if (!error && data && data.error_code === 'UNAUTHENTICATED') {
-        checks.rpc_consume_ai_quota = {
-          ok: true,
-          detail: 'RPC atomica consume_ai_quota invocata ed operativa',
-        };
-      } else {
-        checks.rpc_consume_ai_quota = {
-          ok: false,
-          detail: error
-            ? `RPC consume_ai_quota non disponibile (${error.code}): ${error.message}`
-            : 'Risposta inattesa dalla RPC consume_ai_quota',
-        };
-      }
+      checks.rpc_consume_ai_quota.ok = Boolean(
+        !error && data && data.error_code === 'UNAUTHENTICATED'
+      );
     }
-  } catch (e) {
-    checks.rpc_consume_ai_quota = {
-      ok: false,
-      detail: e instanceof Error ? e.message : 'Errore invocazione consume_ai_quota',
-    };
+  } catch {
+    checks.rpc_consume_ai_quota.ok = false;
   }
 
-  // 4. PROBLEMA A — Verifica esecuzione reale della RPC atomica claim_stripe_webhook_event + schema tabella
   try {
-    const { error: tableErr } = await supabaseAdmin
-      .from('stripe_webhook_events')
-      .select('event_id, status, locked_at')
-      .limit(1);
-
-    if (tableErr) {
-      checks.rpc_claim_stripe_webhook = {
-        ok: false,
-        detail: `Tabella stripe_webhook_events non pronta (${tableErr.code}): ${tableErr.message}`,
-      };
-    } else if (typeof supabaseAdmin.rpc === 'function') {
-      // Invoca realmente la funzione RPC claim_stripe_webhook_event con p_event_id = '' (dry-run senza scrittura)
-      const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc(
-        'claim_stripe_webhook_event',
-        {
-          p_event_id: '',
-          p_event_type: 'healthcheck.probe',
-          p_lock_timeout_seconds: 300,
-        }
+    if (typeof supabaseAdmin.rpc === 'function') {
+      const { data, error } = await supabaseAdmin.rpc('claim_stripe_webhook_event', {
+        p_event_id: '',
+        p_event_type: 'healthcheck.probe',
+        p_lock_timeout_seconds: 300,
+      });
+      checks.rpc_claim_stripe_webhook.ok = Boolean(
+        !error && data && (data as { action?: string }).action === 'HEALTHCHECK_OK'
       );
-
-      if (!rpcErr && rpcData && typeof rpcData === 'object') {
-        // Se la funzione ha già il ramo HEALTHCHECK_OK non scrive nulla; se fosse la versione precedente, pulisce la riga ''
-        if ((rpcData as { action?: string }).action !== 'HEALTHCHECK_OK') {
-          await supabaseAdmin.from('stripe_webhook_events').delete().eq('event_id', '');
-        }
-        checks.rpc_claim_stripe_webhook = {
-          ok: true,
-          detail: 'RPC atomica claim_stripe_webhook_event invocata ed operativa',
-        };
-      } else {
-        checks.rpc_claim_stripe_webhook = {
-          ok: false,
-          detail: rpcErr
-            ? `RPC claim_stripe_webhook_event non trovata o in errore (${rpcErr.code}): ${rpcErr.message}`
-            : 'Risposta inattesa dalla RPC claim_stripe_webhook_event',
-        };
-      }
     }
-  } catch (e) {
-    checks.rpc_claim_stripe_webhook = {
-      ok: false,
-      detail: e instanceof Error ? e.message : 'Errore verifica claim_stripe_webhook_event',
-    };
+  } catch {
+    checks.rpc_claim_stripe_webhook.ok = false;
   }
 
   const allReady = Object.values(checks).every((c) => c.ok);
 
   return NextResponse.json(
     {
+      ok: allReady,
       readyForProduction: allReady,
-      checkedAt: new Date().toISOString(),
       checks,
     },
     { status: allReady ? 200 : 503 }

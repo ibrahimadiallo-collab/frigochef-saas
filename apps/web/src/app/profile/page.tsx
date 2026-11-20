@@ -44,7 +44,6 @@ interface ProfileData {
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [diets, setDiets] = useState<string[]>([]);
   const [allergens, setAllergens] = useState<string[]>([]);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -69,7 +68,6 @@ export default function ProfilePage() {
       try {
         const headers = await authHeader();
         if (!headers.Authorization) {
-          setIsLoading(false);
           return;
         }
         const res = await fetch('/api/account', { headers });
@@ -87,8 +85,6 @@ export default function ProfilePage() {
         }
       } catch (err) {
         console.error('Errore caricamento profilo:', err);
-      } finally {
-        setIsLoading(false);
       }
     }
     loadAccount();

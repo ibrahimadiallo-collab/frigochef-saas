@@ -162,7 +162,7 @@ export default function CookMode({ recipe, onClose }: CookModeProps) {
             <span className="fc-label">Tutti i Passaggi ({recipe.passaggi.length})</span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {recipe.passaggi.map((stepText, i) => {
+            {recipe.passaggi.map((_, i) => {
               const isCurrent = currentStep === i;
               const isDone = completedSteps.includes(i);
               return (

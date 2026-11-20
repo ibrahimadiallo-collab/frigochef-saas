@@ -51,8 +51,10 @@ export async function POST(req: Request) {
     const plan = await generateMealPlan(rawIngredients, dietaryPreferences, allergens);
     return NextResponse.json(plan);
   } catch (error: unknown) {
-    console.error('API Error:', error);
-    const message = error instanceof Error ? error.message : 'Errore interno';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Meal Plan API Error:', error);
+    return NextResponse.json(
+      { error: 'Impossibile generare il piano settimanale in questo momento. Riprova tra poco.' },
+      { status: 500 }
+    );
   }
 }

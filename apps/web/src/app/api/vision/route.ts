@@ -64,8 +64,9 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     console.error('Vision API Error:', error);
-    const message =
-      error instanceof Error ? error.message : "Errore durante l'analisi dell'immagine";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Impossibile analizzare l'immagine in questo momento. Riprova tra poco." },
+      { status: 500 }
+    );
   }
 }

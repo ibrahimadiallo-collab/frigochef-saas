@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE,
   referral_code TEXT UNIQUE,
-  referred_by TEXT REFERENCES public.profiles(referral_code),
+  referred_by TEXT REFERENCES public.profiles(referral_code) ON UPDATE CASCADE ON DELETE SET NULL,
   is_pro BOOLEAN DEFAULT FALSE NOT NULL,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   trial_used BOOLEAN DEFAULT FALSE NOT NULL,
   dietary_preferences JSONB DEFAULT '[]'::jsonb NOT NULL,
   allergens JSONB DEFAULT '[]'::jsonb NOT NULL,
+  stripe_last_event_created BIGINT DEFAULT 0 NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -31,7 +32,18 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE NOT NULL,
   ADD COLUMN IF NOT EXISTS dietary_preferences JSONB DEFAULT '[]'::jsonb NOT NULL,
   ADD COLUMN IF NOT EXISTS allergens JSONB DEFAULT '[]'::jsonb NOT NULL,
+  ADD COLUMN IF NOT EXISTS stripe_last_event_created BIGINT DEFAULT 0 NOT NULL,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
+
+ALTER TABLE public.profiles
+  DROP CONSTRAINT IF EXISTS profiles_referred_by_fkey;
+
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_referred_by_fkey
+  FOREIGN KEY (referred_by)
+  REFERENCES public.profiles(referral_code)
+  ON UPDATE CASCADE
+  ON DELETE SET NULL;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -59,6 +71,8 @@ BEGIN
        OR NEW.subscription_period_end IS DISTINCT FROM OLD.subscription_period_end
        OR NEW.trial_used IS DISTINCT FROM OLD.trial_used
        OR NEW.referral_code IS DISTINCT FROM OLD.referral_code
+       OR NEW.referred_by IS DISTINCT FROM OLD.referred_by
+       OR NEW.stripe_last_event_created IS DISTINCT FROM OLD.stripe_last_event_created
        OR NEW.email IS DISTINCT FROM OLD.email
     THEN
       RAISE EXCEPTION 'Operazione non consentita: i campi di abbonamento possono essere modificati solo dal server di fatturazione.';
@@ -67,7 +81,7 @@ BEGIN
   NEW.updated_at = timezone('utc'::text, now());
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS trg_prevent_profile_escalation ON public.profiles;
 CREATE TRIGGER trg_prevent_profile_escalation
@@ -280,7 +294,7 @@ BEGIN
     'remaining', GREATEST(0, v_limit - (v_used + 1))
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE EXECUTE ON FUNCTION public.consume_ai_quota(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 
@@ -344,7 +358,7 @@ BEGIN
 
   RETURN jsonb_build_object('action', 'IN_PROGRESS', 'status', 'processing');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE EXECUTE ON FUNCTION public.claim_stripe_webhook_event(TEXT, TEXT, INTEGER) FROM PUBLIC, anon, authenticated;
 
@@ -352,18 +366,29 @@ REVOKE EXECUTE ON FUNCTION public.claim_stripe_webhook_event(TEXT, TEXT, INTEGER
 -- 9. CREAZIONE AUTOMATICA PROFILO ALLA REGISTRAZIONE
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_raw_ref TEXT;
+  v_valid_ref TEXT := NULL;
 BEGIN
+  v_raw_ref := NULLIF(BTRIM(new.raw_user_meta_data->>'referred_by'), '');
+  IF v_raw_ref IS NOT NULL THEN
+    SELECT referral_code INTO v_valid_ref
+    FROM public.profiles
+    WHERE referral_code = v_raw_ref
+    LIMIT 1;
+  END IF;
+
   INSERT INTO public.profiles (id, email, referred_by, referral_code)
   VALUES (
     new.id,
     new.email,
-    (new.raw_user_meta_data->>'referred_by'),
-    UPPER(SUBSTRING(MD5(new.id::text || now()::text) FROM 1 FOR 8))
+    v_valid_ref,
+    UPPER(SUBSTRING(MD5(new.id::text || clock_timestamp()::text) FROM 1 FOR 8))
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

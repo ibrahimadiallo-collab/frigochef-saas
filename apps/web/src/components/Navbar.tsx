@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LogOut, Crown, X, Mail, Loader2, Sun, Moon,
+  LogOut, Crown, X, Mail, Loader2, Sun, Moon, Monitor,
   Home, Refrigerator, BookOpen, Calendar, User as UserIcon, KeyRound
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -78,7 +78,10 @@ function LoginModal({ onClose }: { onClose: () => void }) {
       const { data, error: err } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          redirectTo:
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/auth/callback`
+              : undefined,
           skipBrowserRedirect: true,
         },
       });
@@ -250,20 +253,22 @@ function LoginModal({ onClose }: { onClose: () => void }) {
                 border: '1px solid var(--fc-border)',
               }}
             >
-              {[
-                { id: 'magic', label: 'Link Magico' },
-                { id: 'password', label: 'Password' },
-                { id: 'signup', label: 'Registrati' },
-              ].map((tab) => (
+              {(
+                [
+                  { id: 'magic', label: 'Link Magico' },
+                  { id: 'password', label: 'Password' },
+                  { id: 'signup', label: 'Registrati' },
+                ] as const
+              ).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => {
-                    setAuthMode(tab.id as any);
+                    setAuthMode(tab.id);
                     setError('');
                   }}
                   style={{
-                    height: 32,
+                    height: 36,
                     borderRadius: 8,
                     border: 'none',
                     fontSize: 12,
@@ -385,38 +390,31 @@ export default function Navbar() {
   const [isPro, setIsPro] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
   const pathname = usePathname();
 
   useEffect(() => {
-    const saved = localStorage.getItem('fc-theme') as 'light' | 'dark' | null;
+    const saved = localStorage.getItem('fc-theme');
     if (saved === 'light' || saved === 'dark') {
-      setTheme(saved);
+      setThemeMode(saved);
       document.documentElement.setAttribute('data-theme', saved);
     } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const initial = prefersDark ? 'dark' : 'light';
-      setTheme(initial);
-      document.documentElement.setAttribute('data-theme', initial);
+      setThemeMode('system');
+      document.documentElement.removeAttribute('data-theme');
     }
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('fc-theme')) {
-        const next = e.matches ? 'dark' : 'light';
-        setTheme(next);
-        document.documentElement.setAttribute('data-theme', next);
-      }
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    localStorage.setItem('fc-theme', next);
-    document.documentElement.setAttribute('data-theme', next);
+  const cycleTheme = () => {
+    const next: 'system' | 'light' | 'dark' =
+      themeMode === 'system' ? 'light' : themeMode === 'light' ? 'dark' : 'system';
+    setThemeMode(next);
+    if (next === 'system') {
+      localStorage.removeItem('fc-theme');
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      localStorage.setItem('fc-theme', next);
+      document.documentElement.setAttribute('data-theme', next);
+    }
   };
 
   useEffect(() => {
@@ -532,12 +530,18 @@ export default function Navbar() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
-              onClick={toggleTheme}
-              title={theme === 'dark' ? 'Passa a Modalità Chiara' : 'Passa a Modalità Scura'}
-              aria-label="Cambia tema chiaro/scuro"
+              onClick={cycleTheme}
+              title={
+                themeMode === 'system'
+                  ? 'Tema: Sistema (clicca per Chiaro)'
+                  : themeMode === 'light'
+                  ? 'Tema: Chiaro (clicca per Scuro)'
+                  : 'Tema: Scuro (clicca per Sistema)'
+              }
+              aria-label="Cambia tema Chiaro / Scuro / Sistema"
               style={{
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 borderRadius: 12,
                 border: '1px solid var(--fc-border)',
                 background: 'var(--fc-surface)',
@@ -549,7 +553,13 @@ export default function Navbar() {
                 flexShrink: 0,
               }}
             >
-              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+              {themeMode === 'dark' ? (
+                <Moon size={17} />
+              ) : themeMode === 'light' ? (
+                <Sun size={17} />
+              ) : (
+                <Monitor size={17} />
+              )}
             </button>
 
             {user && isPro && (

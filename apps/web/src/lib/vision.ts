@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 const geminiKey = process.env.GEMINI_API_KEY;
+const geminiVisionModel = process.env.GEMINI_VISION_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
 const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface VisionIngredient {
@@ -18,7 +19,7 @@ export async function analyzeFridgeImage(base64Image: string): Promise<VisionIng
   const mimeType = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: geminiVisionModel,
     contents: [
       {
         parts: [

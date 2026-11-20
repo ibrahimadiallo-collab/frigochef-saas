@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 const geminiKey = process.env.GEMINI_API_KEY;
+const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
 const ai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface Recipe {
@@ -69,7 +70,7 @@ export async function generateRecipe(
 
   const response = await withTimeout(
     ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: geminiModel,
       contents: `Sei uno chef italiano esperto e nutrizionista. L'utente ha questi ingredienti: ${ingredients}.
 Crea UNA ricetta per ${mealType}, tempo: ${time}.${dietNote}${allergenNote}
 Stima calorie e macro-nutrienti (proteine, carboidrati, grassi), indica eventuali ingredienti base mancanti, possibili sostituzioni e gli allergeni potenzialmente presenti da verificare sull'etichetta.
@@ -137,7 +138,7 @@ export async function generateMealPlan(
 
   const response = await withTimeout(
     ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: geminiModel,
       contents: `Sei uno chef e nutrizionista. L'utente ha questi ingredienti in dispensa: ${ingredients}.${dietNote}${allergenNote}
 Crea un piano alimentare di 7 giorni (Lunedì-Domenica) bilanciato e anti-spreco.
 Rispondi SOLO con un array JSON di 7 oggetti.

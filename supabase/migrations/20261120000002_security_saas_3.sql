@@ -78,7 +78,7 @@ BEGIN
   -- Lock ancora valido: un'altra istanza sta elaborando l'evento in questo momento
   RETURN jsonb_build_object('action', 'IN_PROGRESS', 'status', 'processing');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE EXECUTE ON FUNCTION public.claim_stripe_webhook_event(TEXT, TEXT, INTEGER) FROM PUBLIC, anon, authenticated;
 

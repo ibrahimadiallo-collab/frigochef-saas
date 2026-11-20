@@ -865,10 +865,13 @@ export default function Home() {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
             <Link href="/privacy" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
-              Privacy & Cookie
+              Privacy Policy
             </Link>
             <Link href="/terms" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
               Termini e Condizioni
+            </Link>
+            <Link href="/cookies" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
+              Cookie Policy
             </Link>
             <Link href="/contact" style={{ fontSize: 12, color: 'var(--fc-sage)', fontWeight: 600, textDecoration: 'none' }}>
               Assistenza & FAQ

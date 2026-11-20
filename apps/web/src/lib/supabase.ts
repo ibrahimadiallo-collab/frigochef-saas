@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const createSafeSupabaseClient = () => {
+const createSafeSupabaseClient = (): SupabaseClient => {
   const realClient =
     supabaseUrl && supabaseAnonKey
       ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -13,7 +13,9 @@ const createSafeSupabaseClient = () => {
                 return await fetch(url, options);
               } catch {
                 return new Response(
-                  JSON.stringify({ message: 'Servizio di autenticazione temporaneamente non raggiungibile.' }),
+                  JSON.stringify({
+                    message: 'Servizio di autenticazione temporaneamente non raggiungibile.',
+                  }),
                   { status: 503, headers: { 'Content-Type': 'application/json' } }
                 );
               }
@@ -32,7 +34,9 @@ const createSafeSupabaseClient = () => {
           return { data: { session: null }, error: null };
         }
       },
-      onAuthStateChange: (callback: (event: any, session: any) => void) => {
+      onAuthStateChange: (
+        callback: (event: AuthChangeEvent, session: Session | null) => void
+      ) => {
         if (!realClient) {
           return { data: { subscription: { unsubscribe: () => {} } } };
         }
@@ -46,9 +50,15 @@ const createSafeSupabaseClient = () => {
           return { data: { user: null }, error: null };
         }
       },
-      signInWithOtp: async (params: { email: string; options?: any }) => {
+      signInWithOtp: async (params: {
+        email: string;
+        options?: { data?: Record<string, unknown>; emailRedirectTo?: string };
+      }) => {
         if (!realClient) {
-          return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Supabase non configurato' },
+          };
         }
         try {
           return await realClient.auth.signInWithOtp(params);
@@ -61,7 +71,10 @@ const createSafeSupabaseClient = () => {
       },
       signInWithPassword: async (params: { email: string; password: string }) => {
         if (!realClient) {
-          return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Supabase non configurato' },
+          };
         }
         try {
           return await realClient.auth.signInWithPassword(params);
@@ -72,9 +85,16 @@ const createSafeSupabaseClient = () => {
           };
         }
       },
-      signUp: async (params: { email: string; password: string; options?: any }) => {
+      signUp: async (params: {
+        email: string;
+        password: string;
+        options?: { data?: Record<string, unknown>; emailRedirectTo?: string };
+      }) => {
         if (!realClient) {
-          return { data: { user: null, session: null }, error: { message: 'Supabase non configurato' } };
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Supabase non configurato' },
+          };
         }
         try {
           return await realClient.auth.signUp(params);
@@ -85,7 +105,10 @@ const createSafeSupabaseClient = () => {
           };
         }
       },
-      resetPasswordForEmail: async (email: string, options?: any) => {
+      resetPasswordForEmail: async (
+        email: string,
+        options?: { redirectTo?: string }
+      ) => {
         if (!realClient) {
           return { data: null, error: { message: 'Supabase non configurato' } };
         }
@@ -95,9 +118,31 @@ const createSafeSupabaseClient = () => {
           return { data: null, error: { message: 'Impossibile inviare email di recupero.' } };
         }
       },
-      signInWithOAuth: async (params: { provider: 'google'; options?: any }) => {
+      exchangeCodeForSession: async (authCode: string) => {
+        if (!realClient) {
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Supabase non configurato' },
+          };
+        }
+        try {
+          return await realClient.auth.exchangeCodeForSession(authCode);
+        } catch {
+          return {
+            data: { user: null, session: null },
+            error: { message: 'Impossibile verificare il codice di accesso.' },
+          };
+        }
+      },
+      signInWithOAuth: async (params: {
+        provider: 'google';
+        options?: { redirectTo?: string; skipBrowserRedirect?: boolean };
+      }) => {
         if (!realClient || !supabaseUrl || !supabaseAnonKey) {
-          return { data: { provider: 'google', url: null }, error: { message: 'Supabase non configurato' } };
+          return {
+            data: { provider: 'google', url: null },
+            error: { message: 'Supabase non configurato' },
+          };
         }
         try {
           const settingsRes = await fetch(`${supabaseUrl}/auth/v1/settings`, {
@@ -106,14 +151,19 @@ const createSafeSupabaseClient = () => {
           if (!settingsRes.ok) {
             return {
               data: { provider: 'google', url: null },
-              error: { message: 'Server di autenticazione Supabase in pausa o non raggiungibile.' },
+              error: {
+                message: 'Server di autenticazione Supabase in pausa o non raggiungibile.',
+              },
             };
           }
           const settings = await settingsRes.json();
           if (!settings?.external?.google) {
             return {
               data: { provider: 'google', url: null },
-              error: { message: 'L’accesso con Google non è ancora stato abilitato nel pannello Supabase (Authentication → Providers → Google). Usa l’accesso con Email.' },
+              error: {
+                message:
+                  'L’accesso con Google non è ancora stato abilitato nel pannello Supabase (Authentication → Providers → Google). Usa l’accesso con Email.',
+              },
             };
           }
 
@@ -152,9 +202,9 @@ const createSafeSupabaseClient = () => {
           }),
         }),
         upsert: async () => ({ data: null, error: null }),
-      } as any;
+      };
     },
-  } as any;
+  } as unknown as SupabaseClient;
 };
 
 export const supabase = createSafeSupabaseClient();
@@ -162,7 +212,9 @@ export const supabase = createSafeSupabaseClient();
 export async function authHeader(): Promise<Record<string, string>> {
   if (!supabaseUrl || !supabaseAnonKey) return {};
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
   } catch {
     return {};

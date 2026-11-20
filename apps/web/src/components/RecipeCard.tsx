@@ -104,7 +104,7 @@ export default function RecipeCard({ recipe }: RecipeCardProps) {
                     color: 'var(--fc-fresh)',
                   }}
                 >
-                  Ricetta Generata dall'AI
+                  Ricetta Generata dall&apos;AI
                 </span>
               </div>
 

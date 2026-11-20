@@ -61,7 +61,7 @@ BEGIN
   NEW.updated_at = timezone('utc'::text, now());
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS trg_prevent_profile_escalation ON public.profiles;
 CREATE TRIGGER trg_prevent_profile_escalation
@@ -271,7 +271,7 @@ BEGIN
     'remaining', GREATEST(0, v_limit - (v_used + 1))
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Impedisce la chiamata diretta della funzione da parte di client anonimi/authenticated:
 -- solo service_role (il backend Next.js dopo aver validato la richiesta) può invocarla

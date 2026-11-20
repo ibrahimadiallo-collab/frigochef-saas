@@ -92,8 +92,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error: unknown) {
-    console.error('API Error:', error);
-    const message = error instanceof Error ? error.message : 'Errore interno durante la generazione';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Recipe API Error:', error);
+    return NextResponse.json(
+      { error: 'Servizio di generazione ricette temporaneamente non disponibile. Riprova tra poco.' },
+      { status: 500 }
+    );
   }
 }

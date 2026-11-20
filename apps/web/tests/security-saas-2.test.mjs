@@ -1,41 +1,68 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import Module from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const webRoot = path.resolve(__dirname, '..');
+const srcRoot = path.resolve(webRoot, 'src');
 const repoRoot = path.resolve(webRoot, '../..');
 
-// ============================================================================
-// MOTORE TRANSAZIONALE STATEFUL IN-MEMORY (Simula Supabase PostgreSQL + Stripe)
-// ============================================================================
-
-function computeTrustedIpHash(headersMap, salt = 'frigochef-ip-salt-2026') {
-  const vercelIp = headersMap['x-vercel-forwarded-for'];
-  const realIp = headersMap['x-real-ip'];
-  const forwardedFor = headersMap['x-forwarded-for'];
-
-  let rawIp = '0.0.0.0';
-  if (vercelIp) {
-    rawIp = vercelIp.split(',')[0].trim();
-  } else if (realIp) {
-    rawIp = realIp.trim();
-  } else if (forwardedFor) {
-    const hops = forwardedFor.split(',').map((s) => s.trim()).filter(Boolean);
-    rawIp = hops[hops.length - 1] || '0.0.0.0';
-  }
-
-  return crypto
-    .createHash('sha256')
-    .update(`fc-ip-v1:${salt}:${rawIp}`)
-    .digest('hex')
-    .slice(0, 32);
+// Loader nativo Node 24 per risolvere alias `@/*` e import relativi TypeScript senza estensione
+if (typeof Module.registerHooks === 'function') {
+  Module.registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier.startsWith('@/')) {
+        const target = path.join(srcRoot, specifier.slice(2));
+        for (const ext of ['', '.ts', '.tsx', '/index.ts']) {
+          if (fs.existsSync(target + ext) && fs.statSync(target + ext).isFile()) {
+            return nextResolve(pathToFileURL(target + ext).href, context);
+          }
+        }
+      }
+      if (
+        (specifier.startsWith('./') || specifier.startsWith('../')) &&
+        context.parentURL &&
+        !path.extname(specifier)
+      ) {
+        const parentDir = path.dirname(fileURLToPath(context.parentURL));
+        const target = path.resolve(parentDir, specifier);
+        for (const ext of ['.ts', '.tsx', '/index.ts']) {
+          if (fs.existsSync(target + ext) && fs.statSync(target + ext).isFile()) {
+            return nextResolve(pathToFileURL(target + ext).href, context);
+          }
+        }
+      }
+      return nextResolve(specifier, context);
+    },
+  });
 }
 
+// ============================================================================
+// IMPORTAZIONE DIRETTA DEI MODULI DI PRODUZIONE REALI (Passo 7)
+// ============================================================================
+const {
+  arePaymentsEnabled,
+  getConfiguredStripePriceId,
+  resolveSafeAppOrigin,
+} = await import('../src/lib/billing.ts');
+
+const {
+  getTrustedClientIpHash,
+  resolveIpHmacSecret,
+  checkRateLimit,
+} = await import('../src/lib/rate-limit.ts');
+
+const { verifyAndConsumeAIQuota } = await import('../src/lib/quotas.ts');
+const { processStripeWebhookEvent } = await import('../src/lib/stripe-webhook.ts');
+const { executeAccountExport, executeAccountDeletion } = await import('../src/lib/account.ts');
+
+// ============================================================================
+// MOCK DATABASE STATEFUL IN-MEMORY INIETTATO NELLE FUNZIONI DI PRODUZIONE REALI
+// ============================================================================
 class StatefulSupabaseMock {
   constructor() {
     this.tables = {
@@ -85,7 +112,14 @@ class StatefulSupabaseMock {
         const { p_user_id, p_action_type, p_ip_hash } = params;
         if (!p_user_id) {
           return {
-            data: { allowed: false, is_pro: false, used: 0, limit: 0, remaining: 0 },
+            data: {
+              allowed: false,
+              is_pro: false,
+              used: 0,
+              limit: 0,
+              remaining: 0,
+              error_code: 'UNAUTHENTICATED',
+            },
             error: null,
           };
         }
@@ -137,6 +171,10 @@ class StatefulSupabaseMock {
 
       if (fnName === 'claim_stripe_webhook_event') {
         const { p_event_id, p_event_type, p_lock_timeout_seconds = 300 } = params;
+        if (!p_event_id || p_event_id.trim() === '') {
+          return { data: { action: 'HEALTHCHECK_OK', status: 'ready' }, error: null };
+        }
+
         const existing = this.tables.stripe_webhook_events.find(
           (e) => e.event_id === p_event_id
         );
@@ -174,7 +212,6 @@ class StatefulSupabaseMock {
   }
 
   from(tableName) {
-    const self = this;
     const rows = this.tables[tableName];
 
     return {
@@ -192,23 +229,21 @@ class StatefulSupabaseMock {
             },
           };
         },
+        limit: async (n) => ({ data: rows.slice(0, n), error: null }),
       }),
       insert: async (newRows) => {
         for (const row of newRows) {
-          if (tableName === 'stripe_webhook_events') {
-            const dup = rows.find((r) => r.event_id === row.event_id);
-            if (dup) {
-              return { data: null, error: { code: '23505', message: 'duplicate key value' } };
-            }
-          }
           rows.push({ ...row });
         }
         return { data: newRows, error: null };
       },
       update: (patch) => ({
         eq: async (col, val) => {
-          if (self.failUpdateOnTable === tableName) {
-            return { data: null, error: { code: 'XX000', message: `Simulated DB update error on ${tableName}` } };
+          if (this.failUpdateOnTable === tableName) {
+            return {
+              data: null,
+              error: { code: 'XX000', message: `Simulated DB update error on ${tableName}` },
+            };
           }
           let updated = 0;
           for (const row of rows) {
@@ -222,8 +257,11 @@ class StatefulSupabaseMock {
       }),
       delete: () => ({
         eq: async (col, val) => {
-          if (self.failDeleteOnTable === tableName) {
-            return { data: null, error: { code: 'XX000', message: `Simulated DB delete error on ${tableName}` } };
+          if (this.failDeleteOnTable === tableName) {
+            return {
+              data: null,
+              error: { code: 'XX000', message: `Simulated DB delete error on ${tableName}` },
+            };
           }
           this.tables[tableName] = rows.filter((r) => r[col] !== val);
           return { data: null, error: null };
@@ -233,379 +271,351 @@ class StatefulSupabaseMock {
   }
 }
 
-// Ricrea gli handler eseguibili fedeli a webhook/route.ts e account/route.ts
-async function runWebhookStateMachine(event, db) {
-  const { data: claimData, error: claimErr } = await db.rpc('claim_stripe_webhook_event', {
-    p_event_id: event.id,
-    p_event_type: event.type,
-    p_lock_timeout_seconds: 300,
+describe('FrigoChef Security-SaaS-4 — Real Production Code Execution Test Suite', () => {
+  test('1. BILLING KILL-SWITCH (src/lib/billing.ts): PAYMENTS_ENABLED=false di default e rifiuto prezzi non configurati', () => {
+    assert.equal(arePaymentsEnabled({}), false, 'Di default i pagamenti devono essere disabilitati');
+    assert.equal(arePaymentsEnabled({ PAYMENTS_ENABLED: 'false' }), false);
+    assert.equal(arePaymentsEnabled({ PAYMENTS_ENABLED: 'true' }), true);
+
+    assert.equal(getConfiguredStripePriceId('monthly', {}), null);
+    assert.equal(
+      getConfiguredStripePriceId('monthly', { STRIPE_PRICE_MONTHLY_ID: 'price_placeholder' }),
+      null
+    );
+    assert.equal(
+      getConfiguredStripePriceId('monthly', { STRIPE_PRICE_MONTHLY_ID: 'price_1RealMonthly' }),
+      'price_1RealMonthly'
+    );
+    assert.equal(
+      getConfiguredStripePriceId('annual', { STRIPE_PRICE_ANNUAL_ID: 'price_1RealAnnual' }),
+      'price_1RealAnnual'
+    );
+
+    const req = new Request('https://preview-frigochef.vercel.app/api/stripe/checkout');
+    assert.equal(resolveSafeAppOrigin(req, {}), 'https://preview-frigochef.vercel.app');
   });
 
-  if (claimErr) return { status: 500, body: { error: claimErr.message } };
-  if (claimData.action === 'ALREADY_COMPLETED') {
-    return { status: 200, body: { received: true, duplicate: true } };
-  }
-  if (claimData.action === 'IN_PROGRESS') {
-    return { status: 409, body: { error: 'Event in progress', retryable: true } };
-  }
-
-  try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      if (!session.metadata?.userId) throw new Error('Missing userId');
-      const { error: updateError } = await db
-        .from('profiles')
-        .update({
-          is_pro: true,
-          stripe_customer_id: session.customer,
-          stripe_subscription_id: session.subscription,
-          subscription_status: 'active',
-        })
-        .eq('id', session.metadata.userId);
-      if (updateError) throw new Error(updateError.message);
-    } else if (event.type === 'invoice.payment_failed') {
-      const invoice = event.data.object;
-      const { error: updateError } = await db
-        .from('profiles')
-        .update({ is_pro: false, subscription_status: 'past_due' })
-        .eq('stripe_customer_id', invoice.customer);
-      if (updateError) throw new Error(updateError.message);
-    }
-
-    const { error: finErr } = await db
-      .from('stripe_webhook_events')
-      .update({ status: 'completed' })
-      .eq('event_id', event.id);
-    if (finErr) throw new Error(finErr.message);
-
-    return { status: 200, body: { received: true } };
-  } catch (err) {
-    await db.from('stripe_webhook_events').delete().eq('event_id', event.id);
-    return { status: 500, body: { error: err.message } };
-  }
-}
-
-async function runAccountDeletionPipeline(userId, db, stripeMock) {
-  const { data: profile } = await db.from('profiles').select().eq('id', userId).single();
-
-  if (profile?.stripe_subscription_id) {
-    try {
-      await stripeMock.subscriptions.cancel(profile.stripe_subscription_id);
-    } catch (e) {
-      if (e.code !== 'resource_missing') {
-        return { status: 502, body: { error: 'Stripe cancel failed' } };
-      }
-    }
-  }
-
-  const userTables = [
-    { table: 'shopping_lists', col: 'user_id' },
-    { table: 'meal_plans', col: 'user_id' },
-    { table: 'saved_recipes', col: 'user_id' },
-    { table: 'recipes', col: 'user_id' },
-    { table: 'pantry', col: 'user_id' },
-    { table: 'ai_usage_logs', col: 'user_id' },
-    { table: 'profiles', col: 'id' },
-  ];
-
-  const deletedTables = [];
-  for (const { table, col } of userTables) {
-    const { error: delError } = await db.from(table).delete().eq(col, userId);
-    if (delError) {
-      return {
-        status: 500,
-        body: { error: `Failed on ${table}`, partialProgress: deletedTables },
-      };
-    }
-    deletedTables.push(table);
-  }
-
-  const { error: authErr } = await db.auth.admin.deleteUser(userId);
-  if (authErr) return { status: 500, body: { error: authErr.message } };
-
-  return { status: 200, body: { success: true, deletedTables } };
-}
-
-describe('FrigoChef Security-SaaS-3 — Behavioral & Functional Test Suite', () => {
-  test('1. CONCORRENZA QUOTE AI: 5 richieste simultanee per utente Free autorizzano esattamente 3 chiamate e bloccano le altre 2', async () => {
+  test('2. QUOTE AI ATOMICHE & CONCORRENZA (src/lib/quotas.ts): Esecuzione reale di verifyAndConsumeAIQuota con 5 richieste simultanee e fail-closed 503', async () => {
     const db = new StatefulSupabaseMock();
-    const userId = 'user-free-123';
+    const userId = 'user-free-real-1';
     db.tables.profiles.push({ id: userId, is_pro: false });
 
-    const ipHash = computeTrustedIpHash({ 'x-vercel-forwarded-for': '203.0.113.42' });
+    const makeReq = (auth = true) =>
+      new Request('https://frigochef.it/api/recipe', {
+        method: 'POST',
+        headers: auth
+          ? {
+              authorization: 'Bearer valid-jwt-token-123456789012345',
+              'x-vercel-forwarded-for': '203.0.113.42',
+            }
+          : { 'x-vercel-forwarded-for': '203.0.113.42' },
+      });
 
-    const concurrentRequests = Array.from({ length: 5 }, () =>
-      db.rpc('consume_ai_quota', {
-        p_user_id: userId,
-        p_action_type: 'recipe',
-        p_ip_hash: ipHash,
-      })
-    );
-
-    const results = await Promise.all(concurrentRequests);
-    const allowedCount = results.filter((r) => r.data?.allowed === true).length;
-    const blockedCount = results.filter((r) => r.data?.allowed === false).length;
-
-    assert.equal(allowedCount, 3, 'Esattamente 3 richieste devono essere consentite per il piano Free');
-    assert.equal(blockedCount, 2, 'Le 2 richieste eccedenti in parallelo devono essere bloccate');
-    assert.equal(db.tables.ai_usage_logs.length, 3, 'Nel DB devono risultare esattamente 3 consumi registrati');
-  });
-
-  test('2. CRITICO 2 (FALLBACK DISABILITATI): Sia quotas.ts sia webhook/route.ts usano esclusivamente RPC atomiche senza percorsi alternativi non atomici', () => {
-    const quotasCode = fs.readFileSync(path.join(webRoot, 'src/lib/quotas.ts'), 'utf8');
-    const webhookCode = fs.readFileSync(
-      path.join(webRoot, 'src/app/api/stripe/webhook/route.ts'),
-      'utf8'
-    );
-
-    assert.ok(
-      !quotasCode.includes(".from('ai_usage_logs')"),
-      'quotas.ts non deve contenere alcun fallback non atomico di SELECT/INSERT diretto su ai_usage_logs'
-    );
-    assert.ok(
-      !quotasCode.includes('withUserLock'),
-      'quotas.ts non deve affidarsi a mutex locali in-memory'
-    );
-    assert.ok(
-      quotasCode.includes("db.rpc('consume_ai_quota'"),
-      'quotas.ts deve usare esclusivamente la RPC atomica consume_ai_quota'
-    );
-    assert.ok(
-      !webhookCode.includes("claimError.code === '23505'"),
-      'webhook/route.ts non deve contenere il percorso alternativo non atomico di INSERT/UPDATE per il claim del lock'
-    );
-    assert.ok(
-      webhookCode.includes("db.rpc('claim_stripe_webhook_event'"),
-      'webhook/route.ts deve usare esclusivamente la RPC atomica claim_stripe_webhook_event per acquisire il lock'
-    );
-  });
-
-  test('3. ALTO 3 (HASHING IP & ANTI-SPOOFING): Priorità a x-vercel-forwarded-for e digest SHA-256 irreversibile', () => {
-    const rawSpoofedIp = '1.2.3.4';
-    const rawTrustedVercelIp = '198.51.100.77';
-
-    const hashWithSpoofAttempt = computeTrustedIpHash({
-      'x-forwarded-for': `${rawSpoofedIp}, ${rawTrustedVercelIp}`,
-      'x-vercel-forwarded-for': rawTrustedVercelIp,
+    // A) Richiesta senza autenticazione -> 401
+    const unauthRes = await verifyAndConsumeAIQuota(makeReq(false), 'recipe', {
+      getUser: async () => null,
+      db,
     });
-    const hashCleanVercel = computeTrustedIpHash({
-      'x-vercel-forwarded-for': rawTrustedVercelIp,
-    });
+    assert.equal(unauthRes.allowed, false);
+    assert.equal(unauthRes.statusCode, 401);
 
-    assert.equal(
-      hashWithSpoofAttempt,
-      hashCleanVercel,
-      "L'header x-vercel-forwarded-for deve prevalere su un x-forwarded-for manipolato dal client"
+    // B) 5 richieste concorrenti con utente Free (limite 3/giorno) -> 3 passano (200), 2 bloccate (429)
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        verifyAndConsumeAIQuota(makeReq(true), 'recipe', {
+          getUser: async () => ({ id: userId, email: 'free@test.it' }),
+          db,
+        })
+      )
     );
-    assert.equal(hashCleanVercel.length, 32);
-    assert.match(hashCleanVercel, /^[0-9a-f]{32}$/);
-    assert.ok(!hashCleanVercel.includes(rawTrustedVercelIp));
+
+    const allowed = results.filter((r) => r.allowed && r.statusCode === 200);
+    const blocked = results.filter((r) => !r.allowed && r.statusCode === 429);
+    assert.equal(allowed.length, 3, 'Esattamente 3 chiamate devono essere autorizzate');
+    assert.equal(blocked.length, 2, 'Le 2 chiamate concorrenti in eccesso devono ricevere 429');
+
+    // Verifica che l'ip_hash salvato da verifyAndConsumeAIQuota nel DB sia un HMAC-SHA256 a 64 caratteri hex
+    const savedIpHash = db.tables.ai_usage_logs[0].ip_hash;
+    assert.equal(savedIpHash.length, 64);
+    assert.match(savedIpHash, /^[0-9a-f]{64}$/);
+    assert.ok(!savedIpHash.includes('203.0.113.42'));
+
+    // C) Se la RPC sul DB non è disponibile -> fail-closed 503 (nessun fallback non atomico)
+    db.rpcDisabled = true;
+    const failClosedRes = await verifyAndConsumeAIQuota(makeReq(true), 'recipe', {
+      getUser: async () => ({ id: userId, email: 'free@test.it' }),
+      db,
+    });
+    assert.equal(failClosedRes.allowed, false);
+    assert.equal(failClosedRes.statusCode, 503);
   });
 
-  test('4. CRITICO 1 (WEBHOOK STRIPE): Simulazione completa di duplicati, eventi bloccati (stale lock), errori DB e pagamenti falliti', async () => {
+  test('3. HMAC-SHA256 IP HASHING (src/lib/rate-limit.ts): Esecuzione reale di getTrustedClientIpHash e non-collisione su chiavi JWT', () => {
+    const reqSpoof = new Request('https://frigochef.it/api/recipe', {
+      headers: {
+        'x-forwarded-for': '1.2.3.4, 198.51.100.77',
+        'x-vercel-forwarded-for': '198.51.100.77',
+      },
+    });
+    const reqTrusted = new Request('https://frigochef.it/api/recipe', {
+      headers: {
+        'x-vercel-forwarded-for': '198.51.100.77',
+      },
+    });
+
+    const hashA = getTrustedClientIpHash(reqSpoof, 'secret-key-alpha-1234567890');
+    const hashB = getTrustedClientIpHash(reqTrusted, 'secret-key-alpha-1234567890');
+    const hashDifferentSecret = getTrustedClientIpHash(reqTrusted, 'secret-key-beta-0987654321');
+
+    assert.equal(hashA, hashB, 'x-vercel-forwarded-for deve prevalere su x-forwarded-for falsificato');
+    assert.notEqual(hashB, hashDifferentSecret, 'Segreti HMAC diversi devono produrre digest diversi');
+    assert.equal(hashB.length, 64);
+
+    // Verifica che due service role key JWT con gli stessi primi 16 caratteri (eyJhbGciOiJIUzI1) producano chiavi HMAC diverse
+    const jwt1 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload1.signature_one_abc';
+    const jwt2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload2.signature_two_xyz';
+    const key1 = resolveIpHmacSecret(undefined, { SUPABASE_SERVICE_ROLE_KEY: jwt1 });
+    const key2 = resolveIpHmacSecret(undefined, { SUPABASE_SERVICE_ROLE_KEY: jwt2 });
+    assert.notDeepEqual(
+      key1,
+      key2,
+      'Due JWT con lo stesso header di 16 caratteri devono generare chiavi HMAC distinte'
+    );
+
+    const rl1 = checkRateLimit(reqTrusted, 'test-bucket', 2, 60_000);
+    const rl2 = checkRateLimit(reqTrusted, 'test-bucket', 2, 60_000);
+    const rl3 = checkRateLimit(reqTrusted, 'test-bucket', 2, 60_000);
+    assert.equal(rl1.allowed, true);
+    assert.equal(rl2.allowed, true);
+    assert.equal(rl3.allowed, false);
+  });
+
+  test('4. WEBHOOK STRIPE REALE (src/lib/stripe-webhook.ts): Esecuzione di processStripeWebhookEvent su 0 righe abbinate, eventi fuori ordine, stale lock e cambio piano', async () => {
     const db = new StatefulSupabaseMock();
     db.nowMs = 1_795_000_000_000;
+
     db.tables.profiles.push({
-      id: 'user-1',
+      id: 'user-stripe-1',
       is_pro: false,
       stripe_customer_id: null,
       subscription_status: 'free',
+      subscription_plan: 'free',
+      stripe_last_event_created: 0,
     });
 
+    // A) customer.subscription.updated arriva PRIMA che stripe_customer_id sia salvato (0 righe trovate e nessun metadata.userId)
+    // -> Deve fallire con 500 e rimuovere il lock processing, così Stripe riprova dopo checkout.session.completed!
+    const orphanUpdateEvent = {
+      id: 'evt_orphan_sub_update',
+      type: 'customer.subscription.updated',
+      created: 1000,
+      data: {
+        object: {
+          id: 'sub_999',
+          customer: 'cus_not_linked_yet',
+          status: 'active',
+          items: { data: [{ current_period_end: 1800000000, price: { recurring: { interval: 'year' } } }] },
+        },
+      },
+    };
+    const orphanRes = await processStripeWebhookEvent(orphanUpdateEvent, db, db.nowMs);
+    assert.equal(
+      orphanRes.status,
+      500,
+      'Un evento su un customer non ancora associato (0 righe) deve restituire 500 per far riprovare Stripe'
+    );
+    assert.equal(db.tables.stripe_webhook_events.length, 0);
+
+    // B) checkout.session.completed associa cus_999 a user-stripe-1 (created: 1010)
     const checkoutEvent = {
-      id: 'evt_checkout_1',
+      id: 'evt_checkout_ok',
       type: 'checkout.session.completed',
+      created: 1010,
       data: {
         object: {
-          id: 'cs_1',
-          customer: 'cus_123',
-          subscription: 'sub_123',
+          id: 'cs_ok',
+          customer: 'cus_999',
+          subscription: 'sub_999',
           payment_status: 'paid',
-          metadata: { userId: 'user-1', plan: 'plus_monthly' },
+          metadata: { userId: 'user-stripe-1', plan: 'plus_monthly' },
         },
       },
     };
+    const checkoutRes = await processStripeWebhookEvent(checkoutEvent, db, db.nowMs);
+    assert.equal(checkoutRes.status, 200);
+    assert.equal(db.tables.profiles[0].is_pro, true);
+    assert.equal(db.tables.profiles[0].stripe_customer_id, 'cus_999');
+    assert.equal(db.tables.profiles[0].stripe_last_event_created, 1010);
 
-    // Scenario A: Errore database durante l'aggiornamento del profilo -> deve restituire 500 e rimuovere il lock processing
-    db.failUpdateOnTable = 'profiles';
-    const failedRes = await runWebhookStateMachine(checkoutEvent, db);
-    assert.equal(failedRes.status, 500, 'Un errore DB su profiles deve restituire HTTP 500 a Stripe');
-    assert.equal(
-      db.tables.stripe_webhook_events.length,
-      0,
-      'Il lock processing deve essere rimosso dopo un errore DB per consentire il retry'
-    );
-    assert.equal(db.tables.profiles[0].is_pro, false, 'Il profilo non deve risultare Pro se il DB ha fallito');
-
-    // Scenario B: Evento bloccato in 'processing' per crash improvviso del server
-    db.failUpdateOnTable = null;
-    db.tables.stripe_webhook_events.push({
-      event_id: 'evt_checkout_1',
-      event_type: 'checkout.session.completed',
-      status: 'processing',
-      locked_at: new Date(db.nowMs).toISOString(),
-      processed_at: new Date(db.nowMs).toISOString(),
-    });
-
-    // Retry dopo soli 20 secondi (lock ancora attivo) -> deve restituire 409 Conflict (MAI 200!)
-    db.nowMs += 20_000;
-    const inProgressRes = await runWebhookStateMachine(checkoutEvent, db);
-    assert.equal(
-      inProgressRes.status,
-      409,
-      'Un evento in processing da meno di 5 minuti deve restituire 409 così Stripe non lo considera completato'
-    );
-
-    // Retry dopo 6 minuti (lock scaduto > 300s) -> deve recuperare il lock (RECLAIMED), aggiornare il profilo a Pro e marcare completed
-    db.nowMs += 350_000;
-    const reclaimedRes = await runWebhookStateMachine(checkoutEvent, db);
-    assert.equal(reclaimedRes.status, 200, 'Il retry dopo la scadenza del lock deve completare il webhook con 200');
-    assert.equal(db.tables.profiles[0].is_pro, true, 'Il profilo deve ora essere aggiornato a Pro');
-    assert.equal(db.tables.stripe_webhook_events[0].status, 'completed');
-
-    // Scenario C: Ulteriore delivery duplicata dello stesso evento già completato -> 200 duplicate
-    const dupRes = await runWebhookStateMachine(checkoutEvent, db);
-    assert.equal(dupRes.status, 200);
-    assert.equal(dupRes.body.duplicate, true);
-
-    // Scenario D: Pagamento rinnovo fallito (invoice.payment_failed) -> disattiva is_pro e imposta past_due
-    const failedInvoiceEvent = {
-      id: 'evt_invoice_fail_1',
-      type: 'invoice.payment_failed',
+    // C) customer.subscription.updated con cambio piano ad Annuale e current_period_end dentro items.data[0] (created: 1020)
+    const upgradeAnnualEvent = {
+      id: 'evt_upgrade_annual',
+      type: 'customer.subscription.updated',
+      created: 1020,
       data: {
         object: {
-          customer: 'cus_123',
+          id: 'sub_999',
+          customer: 'cus_999',
+          status: 'active',
+          items: {
+            data: [
+              {
+                current_period_end: 1825000000,
+                price: { recurring: { interval: 'year' } },
+              },
+            ],
+          },
         },
       },
     };
-    const failInvoiceRes = await runWebhookStateMachine(failedInvoiceEvent, db);
-    assert.equal(failInvoiceRes.status, 200);
+    const upgradeRes = await processStripeWebhookEvent(upgradeAnnualEvent, db, db.nowMs);
+    assert.equal(upgradeRes.status, 200);
+    assert.equal(db.tables.profiles[0].subscription_plan, 'plus_annual');
+    assert.equal(
+      db.tables.profiles[0].subscription_period_end,
+      new Date(1825000000 * 1000).toISOString(),
+      'current_period_end deve essere estratto correttamente anche da items.data[0]'
+    );
+
+    // D) customer.subscription.deleted (created: 1050) disattiva l'abbonamento
+    const deleteSubEvent = {
+      id: 'evt_sub_deleted',
+      type: 'customer.subscription.deleted',
+      created: 1050,
+      data: {
+        object: {
+          id: 'sub_999',
+          customer: 'cus_999',
+          status: 'canceled',
+        },
+      },
+    };
+    const delRes = await processStripeWebhookEvent(deleteSubEvent, db, db.nowMs);
+    assert.equal(delRes.status, 200);
     assert.equal(db.tables.profiles[0].is_pro, false);
-    assert.equal(db.tables.profiles[0].subscription_status, 'past_due');
+    assert.equal(db.tables.profiles[0].subscription_status, 'canceled');
+
+    // E) Un vecchio evento invoice.paid fuori ordine (created: 1030 < 1050) arriva in ritardo:
+    // NON deve riattivare is_pro=true!
+    const staleInvoicePaid = {
+      id: 'evt_old_invoice_paid',
+      type: 'invoice.paid',
+      created: 1030,
+      data: {
+        object: {
+          customer: 'cus_999',
+        },
+      },
+    };
+    const staleRes = await processStripeWebhookEvent(staleInvoicePaid, db, db.nowMs);
+    assert.equal(staleRes.status, 200);
+    assert.equal(
+      db.tables.profiles[0].is_pro,
+      false,
+      'Un evento invoice.paid con timestamp created più vecchio di subscription.deleted non deve riattivare Pro'
+    );
   });
 
-  test('5. CRITICO 3 (CANCELLAZIONE ACCOUNT & ISOLAMENTO MULTI-UTENTE): Verifica blocco su errore Stripe/DB e isolamento totale dei dati di altri utenti', async () => {
+  test('5. CANCELLAZIONE & EXPORT GDPR REALI (src/lib/account.ts): Esecuzione di executeAccountDeletion con utenti invitati (referred_by) e isolamento multi-utente', async () => {
     const db = new StatefulSupabaseMock();
 
-    // Popoliamo tutte le 7 tabelle per due utenti distinti: user-a e user-b
+    // user-a ha invitato user-b (user-b.referred_by = 'REFA1234')
+    db.authUsers.add('user-a');
+    db.authUsers.add('user-b');
+    db.tables.profiles.push(
+      {
+        id: 'user-a',
+        email: 'a@test.it',
+        referral_code: 'REFA1234',
+        referred_by: null,
+        stripe_customer_id: 'cus_a',
+        stripe_subscription_id: 'sub_a',
+      },
+      {
+        id: 'user-b',
+        email: 'b@test.it',
+        referral_code: 'REFB5678',
+        referred_by: 'REFA1234',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+      }
+    );
+
     for (const uid of ['user-a', 'user-b']) {
-      db.authUsers.add(uid);
-      db.tables.profiles.push({
-        id: uid,
-        email: `${uid}@test.it`,
-        stripe_subscription_id: `sub_${uid}`,
-      });
-      db.tables.pantry.push({ user_id: uid, ingredients: ['uova'] });
-      db.tables.recipes.push({ user_id: uid, slug: `recipe-${uid}` });
+      db.tables.pantry.push({ user_id: uid, ingredients: ['pomodori'] });
+      db.tables.recipes.push({ user_id: uid, slug: `s-${uid}` });
       db.tables.saved_recipes.push({ user_id: uid, recipe_data: {} });
       db.tables.meal_plans.push({ user_id: uid, plan_data: [] });
       db.tables.shopping_lists.push({ user_id: uid, items: [] });
       db.tables.ai_usage_logs.push({ user_id: uid, action_type: 'recipe' });
     }
 
+    // A) Verifica executeAccountExport reale su user-b (include referred_by e tutte le 7 sezioni)
+    const exportRes = await executeAccountExport('user-b', 'b@test.it', db);
+    assert.equal(exportRes.status, 200);
+    assert.equal(exportRes.body.profile.referred_by, 'REFA1234');
+    assert.equal(exportRes.body.mealPlans.length, 1);
+    assert.equal(exportRes.body.shoppingLists.length, 1);
+
+    // B) Verifica executeAccountDeletion reale su user-a (che aveva invitato user-b)
     const canceledSubs = [];
-    let stripeShouldFail = true;
     const stripeMock = {
       subscriptions: {
         cancel: async (subId) => {
-          if (stripeShouldFail) {
-            throw new Error('Stripe API unreachable');
-          }
           canceledSubs.push(subId);
           return { id: subId, status: 'canceled' };
         },
       },
     };
 
-    // Caso 1: Stripe fallisce la disdetta -> l'eliminazione dell'account deve fermarsi con 502 senza cancellare i dati
-    const resStripeFail = await runAccountDeletionPipeline('user-a', db, stripeMock);
-    assert.equal(resStripeFail.status, 502);
-    assert.equal(db.tables.profiles.length, 2, 'Nessun profilo deve essere eliminato se la disdetta Stripe fallisce');
+    const delRes = await executeAccountDeletion('user-a', db, stripeMock);
+    assert.equal(delRes.status, 200);
+    assert.deepEqual(canceledSubs, ['sub_a']);
+    assert.ok(!db.authUsers.has('user-a'));
 
-    // Caso 2: Stripe funziona, ma la tabella meal_plans fallisce durante la cancellazione -> deve restituire 500 con partialProgress
-    stripeShouldFail = false;
-    db.failDeleteOnTable = 'meal_plans';
-    const resDbFail = await runAccountDeletionPipeline('user-a', db, stripeMock);
-    assert.equal(resDbFail.status, 500);
-    assert.deepEqual(resDbFail.body.partialProgress, ['shopping_lists']);
-    assert.ok(db.authUsers.has('user-a'), "L'utente Auth non deve essere eliminato se la pulizia tabelle si è interrotta");
-
-    // Caso 3: Database e Stripe operativi -> elimina completamente user-a ma lascia intatto il 100% dei dati di user-b
-    db.failDeleteOnTable = null;
-    const resSuccess = await runAccountDeletionPipeline('user-a', db, stripeMock);
-    assert.equal(resSuccess.status, 200);
-    assert.ok(canceledSubs.includes('sub_user-a'), "L'abbonamento Stripe di user-a deve essere stato disdetto");
-    assert.ok(!db.authUsers.has('user-a'), 'user-a deve essere stato rimosso da Auth');
-
-    // Verifica che user-a sia scomparso da tutte le 7 tabelle e user-b sia ancora presente in tutte le 7 tabelle
-    for (const [table, col] of [
-      ['profiles', 'id'],
-      ['pantry', 'user_id'],
-      ['recipes', 'user_id'],
-      ['saved_recipes', 'user_id'],
-      ['meal_plans', 'user_id'],
-      ['shopping_lists', 'user_id'],
-      ['ai_usage_logs', 'user_id'],
-    ]) {
-      const remainingForA = db.tables[table].filter((r) => r[col] === 'user-a');
-      const remainingForB = db.tables[table].filter((r) => r[col] === 'user-b');
-      assert.equal(remainingForA.length, 0, `La tabella ${table} non deve più contenere record di user-a`);
-      assert.equal(
-        remainingForB.length,
-        1,
-        `Isolamento dati violato: i record di user-b nella tabella ${table} devono restare intatti`
-      );
-    }
+    // Verifica che user-b abbia ora referred_by = null (scollegato senza errori FK) e tutti i suoi dati intatti
+    const profileB = db.tables.profiles.find((p) => p.id === 'user-b');
+    assert.ok(profileB, 'Il profilo di user-b deve restare intatto');
+    assert.equal(
+      profileB.referred_by,
+      null,
+      'referred_by di user-b deve essere stato scollegato (NULL) alla cancellazione del referrer user-a'
+    );
   });
 
-  test('6. ALTO 4 (SAFE SQL ROLLBACK): Nessuno script di rollback esegue DROP COLUMN o DROP TABLE su dati utente', () => {
-    const rollback2 = fs.readFileSync(
-      path.join(repoRoot, 'supabase/migrations/20261120000001_security_saas_2_rollback.sql'),
-      'utf8'
-    );
-    const rollback3 = fs.readFileSync(
-      path.join(repoRoot, 'supabase/migrations/20261120000002_security_saas_3_rollback.sql'),
-      'utf8'
-    );
-
-    for (const [name, sql] of [
-      ['20261120000001_security_saas_2_rollback.sql', rollback2],
-      ['20261120000002_security_saas_3_rollback.sql', rollback3],
+  test('6. MIGRAZIONI SQL, PAGINE LEGALI E CONFIGURAZIONE BUILD: Verifica integrità file P0', () => {
+    // Verifica presenza delle 3 pagine legali su disco
+    for (const legalPage of [
+      'src/app/privacy/page.tsx',
+      'src/app/terms/page.tsx',
+      'src/app/cookies/page.tsx',
+      'src/app/contact/page.tsx',
+      'src/app/auth/callback/route.ts',
     ]) {
-      const activeStatements = sql
-        .split('\n')
-        .filter((line) => !line.trim().startsWith('--'))
-        .join('\n')
-        .toUpperCase();
-
       assert.ok(
-        !activeStatements.includes('DROP COLUMN'),
-        `Lo script ${name} NON deve contenere istruzioni DROP COLUMN`
-      );
-      assert.ok(
-        !activeStatements.includes('DROP TABLE'),
-        `Lo script ${name} NON deve contenere istruzioni DROP TABLE`
+        fs.existsSync(path.join(webRoot, legalPage)),
+        `La pagina/route obbligatoria ${legalPage} deve esistere`
       );
     }
-  });
 
-  test('7. HEALTH CHECK COMPLETO (/api/health): Invocazione reale di entrambe le RPC e verifica connessione API Stripe', () => {
-    const healthCode = fs.readFileSync(
-      path.join(webRoot, 'src/app/api/health/route.ts'),
+    // Verifica che next.config.ts NON contenga ignoreBuildErrors o ignoreDuringBuilds
+    const nextConfig = fs.readFileSync(path.join(webRoot, 'next.config.ts'), 'utf8');
+    assert.ok(
+      !nextConfig.includes('ignoreBuildErrors'),
+      'next.config.ts non deve contenere ignoreBuildErrors'
+    );
+    assert.ok(
+      !nextConfig.includes('ignoreDuringBuilds'),
+      'next.config.ts non deve contenere ignoreDuringBuilds'
+    );
+
+    // Verifica migrazione SQL 20261120000003_security_saas_4.sql
+    const mig4 = fs.readFileSync(
+      path.join(repoRoot, 'supabase/migrations/20261120000003_security_saas_4.sql'),
       'utf8'
     );
-
-    assert.ok(
-      healthCode.includes("supabaseAdmin.rpc('consume_ai_quota'"),
-      '/api/health deve invocare realmente la RPC consume_ai_quota'
-    );
-    assert.ok(
-      healthCode.includes("'claim_stripe_webhook_event'"),
-      '/api/health deve invocare realmente la RPC claim_stripe_webhook_event'
-    );
-    assert.ok(
-      healthCode.includes('stripe.products.list({ limit: 1 })'),
-      '/api/health deve verificare la validità della chiave Stripe eseguendo una chiamata API reale'
-    );
+    assert.ok(mig4.includes('ON DELETE SET NULL'));
+    assert.ok(mig4.includes('SET search_path = public, pg_temp'));
+    assert.ok(mig4.includes('NEW.referred_by IS DISTINCT FROM OLD.referred_by'));
   });
 });

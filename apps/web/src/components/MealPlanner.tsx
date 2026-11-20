@@ -111,7 +111,7 @@ export default function MealPlanner({ plan }: MealPlannerProps) {
           overflowX: 'auto',
         }}
       >
-        {plan.map((dayItem, i) => (
+        {plan.map((_, i) => (
           <button
             key={i}
             onClick={() => setActiveDay(i)}

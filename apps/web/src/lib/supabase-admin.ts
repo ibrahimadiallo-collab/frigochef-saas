@@ -1,10 +1,9 @@
-import 'server-only';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const createSafeAdminClient = () => {
+const createSafeAdminClient = (): SupabaseClient => {
   if (supabaseUrl && serviceRoleKey) {
     return createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -23,42 +22,42 @@ const createSafeAdminClient = () => {
     });
   }
 
+  const dummyChain = {
+    select: () => dummyChain,
+    eq: () => dummyChain,
+    gte: async () => ({ count: 0, data: [], error: null }),
+    order: () => ({ data: [], error: null }),
+    limit: async () => ({ data: [], error: null }),
+    single: async () => ({ data: null, error: null }),
+    upsert: async () => ({ data: null, error: null }),
+    insert: () => ({
+      select: () => ({
+        single: async () => ({ data: null, error: null }),
+      }),
+    }),
+    update: () => ({
+      eq: () => ({
+        select: async () => ({ data: [], error: null }),
+      }),
+    }),
+    delete: () => ({
+      eq: async () => ({ data: null, error: null }),
+    }),
+  };
+
   return {
     rpc: async () => ({
       data: null,
       error: { code: 'PGRST202', message: 'Supabase Admin non configurato' },
     }),
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          single: async () => ({ data: null, error: null }),
-          order: () => ({ data: [], error: null }),
-          gte: async () => ({ count: 0, data: [], error: null }),
-          eq: () => ({
-            gte: async () => ({ count: 0, data: [], error: null }),
-          }),
-        }),
-      }),
-      upsert: async () => ({ data: null, error: null }),
-      insert: () => ({
-        select: () => ({
-          single: async () => ({ data: null, error: null }),
-        }),
-      }),
-      update: () => ({
-        eq: async () => ({ data: null, error: null }),
-      }),
-      delete: () => ({
-        eq: async () => ({ data: null, error: null }),
-      }),
-    }),
+    from: () => dummyChain,
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
       admin: {
         deleteUser: async () => ({ data: null, error: null }),
       },
     },
-  } as any;
+  } as unknown as SupabaseClient;
 };
 
 export const supabaseAdmin = createSafeAdminClient();
@@ -75,7 +74,10 @@ export async function getUserFromRequest(req: Request) {
     if (!token || token === 'demo-token' || token.length < 20) return null;
     if (!supabaseAdmin.auth) return null;
 
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (error || !user) return null;
     return user;

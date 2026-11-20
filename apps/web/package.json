@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "node --test tests/security-saas-2.test.mjs"
   },
   "dependencies": {
@@ -19,7 +20,7 @@
     "framer-motion": "^12.40.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.16.0",
-    "next": "15.5.19",
+    "next": "^15.5.29",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "server-only": "^0.0.1",
@@ -32,7 +33,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.19",
+    "eslint-config-next": "^15.5.29",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

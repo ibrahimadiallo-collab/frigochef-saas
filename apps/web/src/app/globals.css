@@ -378,7 +378,7 @@ a svg {
   box-shadow: var(--fc-shadow-sm);
 }
 
-/* Input e Select con altezza identica (46px) */
+/* Input e Select con altezza 46px e testo 16px (niente zoom automatico su iOS Safari) */
 .fc-input {
   width: 100%;
   height: 46px;
@@ -386,7 +386,7 @@ a svg {
   border: 1.5px solid var(--fc-border);
   border-radius: var(--radius-md);
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.2;
   font-family: var(--font-sans);
   color: var(--fc-charcoal);
